@@ -126,8 +126,9 @@ public abstract class ShulkerBoxBlockEntityRendererMixin {
                                                OrderedRenderCommandQueue commandQueue,
                                                Sprite sprite,
                                                RenderLayer renderLayer) {
-        // Access the model via the accessor mixin
-        Model<Float> model = ((ShulkerBoxBlockEntityRendererAccessor) renderer).shulkerTrims$getModel();
+        // Access the model via the accessor mixin (returns Object due to inner class type)
+        @SuppressWarnings("unchecked")
+        Model<Float> model = (Model<Float>) ((ShulkerBoxBlockEntityRendererAccessor) renderer).shulkerTrims$getModel();
 
         // Set model animation state
         model.setAngles(renderState.animationProgress);
