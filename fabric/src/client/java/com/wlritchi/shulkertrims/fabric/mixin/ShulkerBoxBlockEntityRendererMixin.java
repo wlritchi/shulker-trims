@@ -5,6 +5,7 @@ import com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod;
 import com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox;
 import com.wlritchi.shulkertrims.fabric.client.ShulkerTrimRenderer;
 import com.wlritchi.shulkertrims.fabric.client.TrimmedShulkerRenderState;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.block.entity.ShulkerBoxBlockEntityRenderer;
@@ -28,6 +29,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ShulkerBoxBlockEntityRendererMixin {
 
     @Unique
+    private static int shulkerTrims$logCount = 0;
+
+    @Unique
     private static boolean shulkerTrims$hasLoggedTrim = false;
 
     /**
@@ -40,7 +44,23 @@ public abstract class ShulkerBoxBlockEntityRendererMixin {
                                                      float tickDelta, Vec3d cameraPos,
                                                      ModelCommandRenderer.CrumblingOverlayCommand crumblingCommand,
                                                      CallbackInfo ci) {
-        if (entity instanceof TrimmedShulkerBox trimmed && renderState instanceof TrimmedShulkerRenderState trimmedState) {
+        boolean entityIsTrimmed = entity instanceof TrimmedShulkerBox;
+        boolean stateIsTrimmed = renderState instanceof TrimmedShulkerRenderState;
+
+        // Log first 3 calls to help debug
+        if (shulkerTrims$logCount < 3) {
+            shulkerTrims$logCount++;
+            ShulkerTrimsMod.LOGGER.info("[DEBUG] updateRenderState #{}: entity instanceof TrimmedShulkerBox = {}", shulkerTrims$logCount, entityIsTrimmed);
+            ShulkerTrimsMod.LOGGER.info("[DEBUG] updateRenderState #{}: renderState instanceof TrimmedShulkerRenderState = {}", shulkerTrims$logCount, stateIsTrimmed);
+            if (entityIsTrimmed) {
+                ShulkerTrim trim = ((TrimmedShulkerBox) entity).shulkerTrims$getTrim();
+                ShulkerTrimsMod.LOGGER.info("[DEBUG] updateRenderState #{}: entity trim = {}", shulkerTrims$logCount, trim);
+            }
+        }
+
+        if (entityIsTrimmed && stateIsTrimmed) {
+            TrimmedShulkerBox trimmed = (TrimmedShulkerBox) entity;
+            TrimmedShulkerRenderState trimmedState = (TrimmedShulkerRenderState) renderState;
             trimmedState.shulkerTrims$setTrim(trimmed.shulkerTrims$getTrim());
         }
     }

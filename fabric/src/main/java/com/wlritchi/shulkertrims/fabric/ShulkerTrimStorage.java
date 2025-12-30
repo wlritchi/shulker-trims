@@ -133,10 +133,13 @@ public final class ShulkerTrimStorage {
      */
     @Nullable
     public static ShulkerTrim readTrimFromData(ReadView data) {
+        ShulkerTrimsMod.LOGGER.info("[DEBUG] readTrimFromData: checking for key '{}'", TRIM_KEY);
         Optional<ReadView> trimData = data.getOptionalReadView(TRIM_KEY);
         if (trimData.isEmpty()) {
+            ShulkerTrimsMod.LOGGER.info("[DEBUG] readTrimFromData: no trim data found");
             return null;
         }
+        ShulkerTrimsMod.LOGGER.info("[DEBUG] readTrimFromData: found trim data!");
 
         ReadView trimView = trimData.get();
         Optional<String> pattern = trimView.getOptionalString(PATTERN_KEY);
