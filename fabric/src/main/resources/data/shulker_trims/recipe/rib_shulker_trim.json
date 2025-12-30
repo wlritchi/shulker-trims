@@ -1,0 +1,12 @@
+{
+  "type": "shulker_trims:shulker_trim",
+  "template": {
+    "item": "minecraft:rib_armor_trim_smithing_template"
+  },
+  "base": {
+    "tag": "shulker_trims:shulker_boxes"
+  },
+  "addition": {
+    "tag": "minecraft:trim_materials"
+  }
+}
