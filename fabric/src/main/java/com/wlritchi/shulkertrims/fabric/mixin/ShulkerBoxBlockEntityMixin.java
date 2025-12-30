@@ -4,8 +4,8 @@ import com.wlritchi.shulkertrims.common.ShulkerTrim;
 import com.wlritchi.shulkertrims.fabric.ShulkerTrimStorage;
 import com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.RegistryWrapper;
+import net.minecraft.storage.ReadView;
+import net.minecraft.storage.WriteView;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Mixin to add trim storage to ShulkerBoxBlockEntity.
- * Handles NBT persistence and provides access via TrimmedShulkerBox interface.
+ * Handles data persistence and provides access via TrimmedShulkerBox interface.
  */
 @Mixin(ShulkerBoxBlockEntity.class)
 public class ShulkerBoxBlockEntityMixin implements TrimmedShulkerBox {
@@ -33,13 +33,13 @@ public class ShulkerBoxBlockEntityMixin implements TrimmedShulkerBox {
         this.shulkerTrims$trim = trim;
     }
 
-    @Inject(method = "readNbt", at = @At("TAIL"))
-    private void shulkerTrims$readTrim(NbtCompound nbt, RegistryWrapper.WrapperLookup registries, CallbackInfo ci) {
-        this.shulkerTrims$trim = ShulkerTrimStorage.readTrim(nbt);
+    @Inject(method = "readData", at = @At("TAIL"))
+    private void shulkerTrims$readTrim(ReadView data, CallbackInfo ci) {
+        this.shulkerTrims$trim = ShulkerTrimStorage.readTrimFromData(data);
     }
 
-    @Inject(method = "writeNbt", at = @At("TAIL"))
-    private void shulkerTrims$writeTrim(NbtCompound nbt, RegistryWrapper.WrapperLookup registries, CallbackInfo ci) {
-        ShulkerTrimStorage.writeTrim(nbt, this.shulkerTrims$trim);
+    @Inject(method = "writeData", at = @At("TAIL"))
+    private void shulkerTrims$writeTrim(WriteView data, CallbackInfo ci) {
+        ShulkerTrimStorage.writeTrimToData(data, this.shulkerTrims$trim);
     }
 }

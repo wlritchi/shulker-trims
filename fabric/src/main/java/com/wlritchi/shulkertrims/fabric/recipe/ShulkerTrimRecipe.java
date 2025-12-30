@@ -5,22 +5,21 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
 import com.wlritchi.shulkertrims.fabric.ShulkerTrimStorage;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.recipe.Ingredient;
+import net.minecraft.recipe.IngredientPlacement;
 import net.minecraft.recipe.RecipeSerializer;
 import net.minecraft.recipe.SmithingRecipe;
 import net.minecraft.recipe.input.SmithingRecipeInput;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.item.trim.ArmorTrimMaterial;
-import net.minecraft.item.trim.ArmorTrimMaterials;
-import net.minecraft.item.trim.ArmorTrimPattern;
-import net.minecraft.item.trim.ArmorTrimPatterns;
-import net.minecraft.world.World;
+import net.minecraft.item.equipment.trim.ArmorTrimMaterial;
+import net.minecraft.item.equipment.trim.ArmorTrimMaterials;
+import net.minecraft.util.Identifier;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -30,18 +29,12 @@ public class ShulkerTrimRecipe implements SmithingRecipe {
     private final Ingredient template;
     private final Ingredient base;
     private final Ingredient addition;
+    private IngredientPlacement ingredientPlacement;
 
     public ShulkerTrimRecipe(Ingredient template, Ingredient base, Ingredient addition) {
         this.template = template;
         this.base = base;
         this.addition = addition;
-    }
-
-    @Override
-    public boolean matches(SmithingRecipeInput input, World world) {
-        return testTemplate(input.template()) &&
-               testBase(input.base()) &&
-               testAddition(input.addition());
     }
 
     @Override
@@ -51,17 +44,19 @@ public class ShulkerTrimRecipe implements SmithingRecipe {
             return ItemStack.EMPTY;
         }
 
-        // Get pattern from template
+        // Get pattern from template item ID
+        // Template items follow pattern: {pattern}_armor_trim_smithing_template
         ItemStack templateStack = input.template();
-        Optional<RegistryEntry.Reference<ArmorTrimPattern>> patternEntry =
-            ArmorTrimPatterns.get(registries, templateStack);
-        if (patternEntry.isEmpty()) {
+        Identifier itemId = Registries.ITEM.getId(templateStack.getItem());
+        String patternName = extractPatternFromTemplateId(itemId);
+        if (patternName == null) {
             return ItemStack.EMPTY;
         }
+        String pattern = itemId.getNamespace() + ":" + patternName;
 
         // Get material from addition
         ItemStack additionStack = input.addition();
-        Optional<RegistryEntry.Reference<ArmorTrimMaterial>> materialEntry =
+        Optional<RegistryEntry<ArmorTrimMaterial>> materialEntry =
             ArmorTrimMaterials.get(registries, additionStack);
         if (materialEntry.isEmpty()) {
             return ItemStack.EMPTY;
@@ -69,55 +64,52 @@ public class ShulkerTrimRecipe implements SmithingRecipe {
 
         // Create result - copy base stack and apply trim
         ItemStack result = baseStack.copyWithCount(1);
-        String pattern = patternEntry.get().registryKey().getValue().toString();
-        String material = materialEntry.get().registryKey().getValue().toString();
+        String material = materialEntry.get().getIdAsString();
         ShulkerTrim trim = new ShulkerTrim(pattern, material);
         ShulkerTrimStorage.writeTrimToItem(result, trim);
 
         return result;
     }
 
-    @Override
-    public ItemStack getResult(RegistryWrapper.WrapperLookup registries) {
-        // Return empty - result depends on input
-        return ItemStack.EMPTY;
+    /**
+     * Extract pattern name from template item ID.
+     * Example: "wild_armor_trim_smithing_template" -> "wild"
+     */
+    private static String extractPatternFromTemplateId(Identifier itemId) {
+        String path = itemId.getPath();
+        String suffix = "_armor_trim_smithing_template";
+        if (path.endsWith(suffix)) {
+            return path.substring(0, path.length() - suffix.length());
+        }
+        return null;
     }
 
     @Override
-    public boolean testTemplate(ItemStack stack) {
-        return template.test(stack);
+    public Optional<Ingredient> template() {
+        return Optional.of(template);
     }
 
     @Override
-    public boolean testBase(ItemStack stack) {
-        return base.test(stack);
+    public Ingredient base() {
+        return base;
     }
 
     @Override
-    public boolean testAddition(ItemStack stack) {
-        return addition.test(stack);
+    public Optional<Ingredient> addition() {
+        return Optional.of(addition);
     }
 
     @Override
-    public RecipeSerializer<?> getSerializer() {
+    public RecipeSerializer<ShulkerTrimRecipe> getSerializer() {
         return ShulkerTrimsRecipeSerializers.SHULKER_TRIM;
     }
 
     @Override
-    public boolean isEmpty() {
-        return false;
-    }
-
-    public Ingredient getTemplate() {
-        return template;
-    }
-
-    public Ingredient getBase() {
-        return base;
-    }
-
-    public Ingredient getAddition() {
-        return addition;
+    public IngredientPlacement getIngredientPlacement() {
+        if (this.ingredientPlacement == null) {
+            this.ingredientPlacement = IngredientPlacement.forShapeless(List.of(template, base, addition));
+        }
+        return this.ingredientPlacement;
     }
 
     /**
@@ -126,9 +118,9 @@ public class ShulkerTrimRecipe implements SmithingRecipe {
     public static class Serializer implements RecipeSerializer<ShulkerTrimRecipe> {
         private static final MapCodec<ShulkerTrimRecipe> CODEC = RecordCodecBuilder.mapCodec(instance ->
             instance.group(
-                Ingredient.ALLOW_EMPTY_CODEC.fieldOf("template").forGetter(ShulkerTrimRecipe::getTemplate),
-                Ingredient.ALLOW_EMPTY_CODEC.fieldOf("base").forGetter(ShulkerTrimRecipe::getBase),
-                Ingredient.ALLOW_EMPTY_CODEC.fieldOf("addition").forGetter(ShulkerTrimRecipe::getAddition)
+                Ingredient.CODEC.fieldOf("template").forGetter(r -> r.template),
+                Ingredient.CODEC.fieldOf("base").forGetter(r -> r.base),
+                Ingredient.CODEC.fieldOf("addition").forGetter(r -> r.addition)
             ).apply(instance, ShulkerTrimRecipe::new)
         );
 

@@ -7,9 +7,8 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.loot.context.LootContextParameterSet;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.loot.context.LootContextParameters;
+import net.minecraft.loot.context.LootWorldContext;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -25,7 +24,7 @@ import java.util.List;
 public class ShulkerBoxBlockMixin {
 
     @Inject(method = "getDroppedStacks", at = @At("RETURN"))
-    private void shulkerTrims$addTrimToDrops(BlockState state, LootContextParameterSet.Builder builder,
+    private void shulkerTrims$addTrimToDrops(BlockState state, LootWorldContext.Builder builder,
                                               CallbackInfoReturnable<List<ItemStack>> cir) {
         List<ItemStack> drops = cir.getReturnValue();
         if (drops.isEmpty()) {
@@ -34,7 +33,7 @@ public class ShulkerBoxBlockMixin {
 
         // Get the block entity from the loot context
         // The BLOCK_ENTITY parameter contains the block entity being broken
-        var blockEntity = builder.getOptional(net.minecraft.loot.context.LootContextParameters.BLOCK_ENTITY);
+        var blockEntity = builder.getOptional(LootContextParameters.BLOCK_ENTITY);
         if (blockEntity == null || !(blockEntity instanceof ShulkerBoxBlockEntity shulkerBE)) {
             return;
         }

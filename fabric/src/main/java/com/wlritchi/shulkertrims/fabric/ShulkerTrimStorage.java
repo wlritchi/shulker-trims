@@ -5,7 +5,11 @@ import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.storage.ReadView;
+import net.minecraft.storage.WriteView;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.Optional;
 
 /**
  * Utility for reading/writing ShulkerTrim data to NBT and ItemStacks.
@@ -54,23 +58,23 @@ public final class ShulkerTrimStorage {
      */
     @Nullable
     public static ShulkerTrim readTrim(NbtCompound nbt) {
-        if (!nbt.contains(TRIM_KEY, NbtCompound.COMPOUND_TYPE)) {
+        Optional<NbtCompound> trimNbtOpt = nbt.getCompound(TRIM_KEY);
+        if (trimNbtOpt.isEmpty()) {
             return null;
         }
 
-        NbtCompound trimNbt = nbt.getCompound(TRIM_KEY);
-        if (!trimNbt.contains(PATTERN_KEY, NbtCompound.STRING_TYPE) ||
-            !trimNbt.contains(MATERIAL_KEY, NbtCompound.STRING_TYPE)) {
+        NbtCompound trimNbt = trimNbtOpt.get();
+        Optional<String> patternOpt = trimNbt.getString(PATTERN_KEY);
+        Optional<String> materialOpt = trimNbt.getString(MATERIAL_KEY);
+
+        if (patternOpt.isEmpty() || materialOpt.isEmpty()) {
             ShulkerTrimsMod.LOGGER.warn("Invalid trim NBT structure: missing pattern or material");
             return null;
         }
 
-        String pattern = trimNbt.getString(PATTERN_KEY);
-        String material = trimNbt.getString(MATERIAL_KEY);
-
-        ShulkerTrim trim = new ShulkerTrim(pattern, material);
+        ShulkerTrim trim = new ShulkerTrim(patternOpt.get(), materialOpt.get());
         if (!trim.isValid()) {
-            ShulkerTrimsMod.LOGGER.warn("Invalid trim identifiers: pattern={}, material={}", pattern, material);
+            ShulkerTrimsMod.LOGGER.warn("Invalid trim identifiers: pattern={}, material={}", patternOpt.get(), materialOpt.get());
             return null;
         }
 
@@ -119,5 +123,53 @@ public final class ShulkerTrimStorage {
         NbtCompound nbt = customData != null ? customData.copyNbt() : new NbtCompound();
         writeTrim(nbt, trim);
         stack.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
+    }
+
+    /**
+     * Read trim data from a ReadView (1.21.10+ block entity data format).
+     *
+     * @param data The ReadView to read from
+     * @return The trim, or null if no valid trim data found
+     */
+    @Nullable
+    public static ShulkerTrim readTrimFromData(ReadView data) {
+        Optional<ReadView> trimData = data.getOptionalReadView(TRIM_KEY);
+        if (trimData.isEmpty()) {
+            return null;
+        }
+
+        ReadView trimView = trimData.get();
+        Optional<String> pattern = trimView.getOptionalString(PATTERN_KEY);
+        Optional<String> material = trimView.getOptionalString(MATERIAL_KEY);
+
+        if (pattern.isEmpty() || material.isEmpty()) {
+            ShulkerTrimsMod.LOGGER.warn("Invalid trim data structure: missing pattern or material");
+            return null;
+        }
+
+        ShulkerTrim trim = new ShulkerTrim(pattern.get(), material.get());
+        if (!trim.isValid()) {
+            ShulkerTrimsMod.LOGGER.warn("Invalid trim identifiers: pattern={}, material={}", pattern.get(), material.get());
+            return null;
+        }
+
+        return trim;
+    }
+
+    /**
+     * Write trim data to a WriteView (1.21.10+ block entity data format).
+     *
+     * @param data The WriteView to write to
+     * @param trim The trim to write, or null to remove existing trim data
+     */
+    public static void writeTrimToData(WriteView data, @Nullable ShulkerTrim trim) {
+        if (trim == null) {
+            data.remove(TRIM_KEY);
+            return;
+        }
+
+        WriteView trimView = data.get(TRIM_KEY);
+        trimView.putString(PATTERN_KEY, trim.pattern());
+        trimView.putString(MATERIAL_KEY, trim.material());
     }
 }

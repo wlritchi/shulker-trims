@@ -30,6 +30,16 @@ dependencies {
     implementation(project(":common"))
 }
 
+// Include common module classes in the fabric jar
+tasks.jar {
+    from(project(":common").sourceSets.main.get().output)
+}
+
+tasks.named<net.fabricmc.loom.task.RemapJarTask>("remapJar") {
+    // Ensure common classes are included before remapping
+    dependsOn(project(":common").tasks.named("classes"))
+}
+
 tasks.processResources {
     inputs.property("version", project.version)
 
