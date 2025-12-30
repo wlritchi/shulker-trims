@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "shulker_trims",
+  "version": "${version}",
+  "name": "Shulker Trims",
+  "description": "Apply armor trims to shulker boxes using the smithing table",
+  "authors": ["wlritchi"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/shulker_trims/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod"],
+    "client": ["com.wlritchi.shulkertrims.fabric.client.ShulkerTrimsClient"]
+  },
+  "mixins": ["shulker_trims.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": ">=1.21",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
