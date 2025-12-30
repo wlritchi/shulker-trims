@@ -3,13 +3,16 @@ package com.wlritchi.shulkertrims.fabric.mixin;
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
 import com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod;
 import com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox;
+import com.wlritchi.shulkertrims.fabric.client.ShulkerTrimRenderer;
 import com.wlritchi.shulkertrims.fabric.client.TrimmedShulkerRenderState;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.block.entity.ShulkerBoxBlockEntityRenderer;
 import net.minecraft.client.render.block.entity.state.ShulkerBoxBlockEntityRenderState;
 import net.minecraft.client.render.command.ModelCommandRenderer;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.state.CameraRenderState;
+import net.minecraft.client.util.SpriteIdentifier;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,7 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * Mixin to add trim rendering to shulker box block entities.
  */
 @Mixin(ShulkerBoxBlockEntityRenderer.class)
-public class ShulkerBoxBlockEntityRendererMixin {
+public abstract class ShulkerBoxBlockEntityRendererMixin {
 
     @Unique
     private static boolean shulkerTrims$hasLoggedTrim = false;
@@ -44,6 +47,7 @@ public class ShulkerBoxBlockEntityRendererMixin {
 
     /**
      * Render trim overlay after the main shulker box rendering.
+     * Uses the existing render method that accepts a SpriteIdentifier.
      */
     @Inject(method = "render(Lnet/minecraft/client/render/block/entity/state/ShulkerBoxBlockEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
             at = @At("TAIL"))
@@ -68,15 +72,25 @@ public class ShulkerBoxBlockEntityRendererMixin {
             shulkerTrims$hasLoggedTrim = true;
         }
 
-        // TODO: Implement actual trim overlay rendering
-        // For now, this is a placeholder that will be expanded with:
-        // 1. Loading trim pattern texture
-        // 2. Applying material color palette
-        // 3. Rendering overlay on the shulker box model
-        //
-        // The rendering will need to:
-        // - Get the trim pattern texture (e.g., "shulker_trims:trims/entity/shulker/wild")
-        // - Apply the material color (from the color palette system)
-        // - Render it on top of the shulker box with proper UV mapping
+        // Get the trim sprite identifier from the armor_trims atlas
+        SpriteIdentifier trimSpriteId = ShulkerTrimRenderer.getTrimSpriteId(trim);
+
+        // Cast to access the renderer's render method
+        ShulkerBoxBlockEntityRenderer renderer = (ShulkerBoxBlockEntityRenderer)(Object)this;
+
+        // Use the existing render method with our trim sprite
+        // This renders the shulker model with the trim texture overlay
+        // The tint parameter is set to 1 (slightly offset from base) to layer properly
+        renderer.render(
+            matrices,
+            commandQueue,
+            renderState.lightmapCoordinates,
+            OverlayTexture.DEFAULT_UV,
+            renderState.facing,
+            renderState.animationProgress,
+            null, // No crumbling for trim overlay
+            trimSpriteId,
+            1 // Render queue index offset for layering
+        );
     }
 }

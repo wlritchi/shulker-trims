@@ -1,0 +1,41 @@
+{
+  "sources": [
+    {
+      "type": "minecraft:paletted_permutations",
+      "palette_key": "shulker_trims:trims/color_palettes/trim_palette",
+      "permutations": {
+        "quartz": "minecraft:trims/color_palettes/quartz",
+        "iron": "minecraft:trims/color_palettes/iron",
+        "gold": "minecraft:trims/color_palettes/gold",
+        "diamond": "minecraft:trims/color_palettes/diamond",
+        "netherite": "minecraft:trims/color_palettes/netherite",
+        "redstone": "minecraft:trims/color_palettes/redstone",
+        "copper": "minecraft:trims/color_palettes/copper",
+        "emerald": "minecraft:trims/color_palettes/emerald",
+        "lapis": "minecraft:trims/color_palettes/lapis",
+        "amethyst": "minecraft:trims/color_palettes/amethyst",
+        "resin": "minecraft:trims/color_palettes/resin"
+      },
+      "textures": [
+        "shulker_trims:trims/entity/shulker/sentry",
+        "shulker_trims:trims/entity/shulker/dune",
+        "shulker_trims:trims/entity/shulker/coast",
+        "shulker_trims:trims/entity/shulker/wild",
+        "shulker_trims:trims/entity/shulker/ward",
+        "shulker_trims:trims/entity/shulker/eye",
+        "shulker_trims:trims/entity/shulker/vex",
+        "shulker_trims:trims/entity/shulker/tide",
+        "shulker_trims:trims/entity/shulker/snout",
+        "shulker_trims:trims/entity/shulker/rib",
+        "shulker_trims:trims/entity/shulker/spire",
+        "shulker_trims:trims/entity/shulker/wayfinder",
+        "shulker_trims:trims/entity/shulker/shaper",
+        "shulker_trims:trims/entity/shulker/silence",
+        "shulker_trims:trims/entity/shulker/raiser",
+        "shulker_trims:trims/entity/shulker/host",
+        "shulker_trims:trims/entity/shulker/flow",
+        "shulker_trims:trims/entity/shulker/bolt"
+      ]
+    }
+  ]
+}
