@@ -9,6 +9,7 @@
     "ShulkerBoxBlockMixin"
   ],
   "client": [
+    "ShulkerBoxBlockEntityRendererAccessor",
     "ShulkerBoxBlockEntityRendererMixin",
     "ShulkerBoxBlockEntityRenderStateMixin"
   ],
