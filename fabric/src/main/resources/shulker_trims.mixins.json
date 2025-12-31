@@ -9,8 +9,11 @@
     "ShulkerBoxBlockMixin"
   ],
   "client": [
+    "ItemModelManagerMixin",
+    "LayerRenderStateMixin",
     "ShulkerBoxBlockEntityRendererMixin",
-    "ShulkerBoxBlockEntityRenderStateMixin"
+    "ShulkerBoxBlockEntityRenderStateMixin",
+    "ShulkerBoxModelRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
