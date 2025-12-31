@@ -2,7 +2,7 @@
   "sources": [
     {
       "type": "minecraft:paletted_permutations",
-      "palette_key": "shulker_trims:trims/color_palettes/trim_palette",
+      "palette_key": "minecraft:trims/color_palettes/trim_palette",
       "permutations": {
         "quartz": "minecraft:trims/color_palettes/quartz",
         "iron": "minecraft:trims/color_palettes/iron",
