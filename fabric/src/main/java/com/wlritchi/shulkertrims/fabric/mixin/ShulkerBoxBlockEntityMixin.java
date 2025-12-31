@@ -45,15 +45,7 @@ public abstract class ShulkerBoxBlockEntityMixin extends BlockEntity implements 
 
     @Inject(method = "readData", at = @At("TAIL"))
     private void shulkerTrims$readTrim(ReadView data, CallbackInfo ci) {
-        com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod.LOGGER.info("[DEBUG] readData called on ShulkerBoxBlockEntity");
         this.shulkerTrims$trim = ShulkerTrimStorage.readTrimFromData(data);
-        if (this.shulkerTrims$trim != null) {
-            com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod.LOGGER.info(
-                "Loaded trim from block entity: pattern={}, material={}",
-                this.shulkerTrims$trim.pattern(), this.shulkerTrims$trim.material());
-        } else {
-            com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod.LOGGER.info("[DEBUG] No trim data found in readData");
-        }
     }
 
     @Inject(method = "writeData", at = @At("TAIL"))
@@ -67,13 +59,9 @@ public abstract class ShulkerBoxBlockEntityMixin extends BlockEntity implements 
      */
     @Override
     public NbtCompound toInitialChunkDataNbt(RegistryWrapper.WrapperLookup registryLookup) {
-        // Create NBT with our trim data for client sync
         NbtCompound nbt = new NbtCompound();
         if (this.shulkerTrims$trim != null) {
             ShulkerTrimStorage.writeTrim(nbt, this.shulkerTrims$trim);
-            com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod.LOGGER.info(
-                "[DEBUG] toInitialChunkDataNbt: including trim pattern={}, material={}",
-                this.shulkerTrims$trim.pattern(), this.shulkerTrims$trim.material());
         }
         return nbt;
     }
