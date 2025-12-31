@@ -17,8 +17,9 @@ Thumbs.db
 # Fabric
 run/
 
-# Bukkit test server
+# Test servers
 run-server/
+run-server-fabric/
 
 *.log
 

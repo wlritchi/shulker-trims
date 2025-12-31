@@ -2,6 +2,7 @@ package com.wlritchi.shulkertrims.fabric.mixin;
 
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
 import com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod;
+import com.wlritchi.shulkertrims.fabric.ShulkerTrimStorage;
 import com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox;
 import com.wlritchi.shulkertrims.fabric.client.ShulkerTrimRenderer;
 import com.wlritchi.shulkertrims.fabric.client.TrimmedShulkerRenderState;
@@ -95,7 +96,19 @@ public abstract class ShulkerBoxBlockEntityRendererMixin {
                                                      ModelCommandRenderer.CrumblingOverlayCommand crumblingCommand,
                                                      CallbackInfo ci) {
         if (entity instanceof TrimmedShulkerBox trimmed && renderState instanceof TrimmedShulkerRenderState trimmedState) {
-            trimmedState.shulkerTrims$setTrim(trimmed.shulkerTrims$getTrim());
+            ShulkerTrim trim = trimmed.shulkerTrims$getTrim();
+
+            // Fallback: if mixin field is null, try reading from block entity components
+            // This handles the case where data comes from a non-Fabric server (e.g., Paper)
+            if (trim == null) {
+                trim = ShulkerTrimStorage.readTrimFromBlockEntityComponents(entity);
+                if (trim != null) {
+                    // Cache it in the mixin field for future renders
+                    trimmed.shulkerTrims$setTrim(trim);
+                }
+            }
+
+            trimmedState.shulkerTrims$setTrim(trim);
         }
     }
 

@@ -1,26 +1,31 @@
 package com.wlritchi.shulkertrims.bukkit;
 
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
+import org.bukkit.block.Block;
 import org.bukkit.block.ShulkerBox;
-import org.bukkit.craftbukkit.block.CraftShulkerBox;
+import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Nullable;
-
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 
 /**
  * Utility for reading/writing ShulkerTrim data using NMS.
  *
  * Storage format matches Fabric implementation exactly:
  * - Items: minecraft:custom_data component containing {"shulker_trims:trim": {"pattern": "...", "material": "..."}}
- * - Block entities: Same structure in block entity NBT
+ * - Block entities: Data stored in block entity's component map (vanilla transfers this automatically)
+ *
+ * In 1.21+, when an item with custom_data is placed, vanilla preserves the component
+ * on the block entity. We read from there.
  */
 public final class ShulkerTrimStorage {
     private ShulkerTrimStorage() {}
@@ -58,16 +63,14 @@ public final class ShulkerTrimStorage {
 
         net.minecraft.world.item.ItemStack nmsStack = CraftItemStack.asNMSCopy(bukkitStack);
 
-        // Get or create custom_data
-        CustomData existingData = nmsStack.get(DataComponents.CUSTOM_DATA);
-        CompoundTag nbt = existingData != null ? existingData.copyTag() : new CompoundTag();
-
-        writeTrimToNbt(nbt, trim);
-
-        if (nbt.isEmpty()) {
+        // Set custom_data - vanilla will preserve this on the block entity when placed
+        CustomData existingCustomData = nmsStack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag customNbt = existingCustomData != null ? existingCustomData.copyTag() : new CompoundTag();
+        writeTrimToNbt(customNbt, trim);
+        if (customNbt.isEmpty()) {
             nmsStack.remove(DataComponents.CUSTOM_DATA);
         } else {
-            nmsStack.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
+            nmsStack.set(DataComponents.CUSTOM_DATA, CustomData.of(customNbt));
         }
 
         return CraftItemStack.asBukkitCopy(nmsStack);
@@ -75,104 +78,92 @@ public final class ShulkerTrimStorage {
 
     /**
      * Read trim data from a placed shulker box block.
+     * Checks both the block entity's component map and its NBT data.
      */
     @Nullable
     public static ShulkerTrim readTrimFromBlock(ShulkerBox shulkerBox) {
-        if (!(shulkerBox instanceof CraftShulkerBox craftBox)) {
+        Block block = shulkerBox.getBlock();
+        if (!(block.getWorld() instanceof CraftWorld craftWorld)) {
             return null;
         }
 
         try {
-            ShulkerBoxBlockEntity blockEntity = getBlockEntity(craftBox);
-            if (blockEntity == null || blockEntity.getLevel() == null) {
+            ServerLevel level = craftWorld.getHandle();
+            BlockPos pos = new BlockPos(block.getX(), block.getY(), block.getZ());
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+
+            if (!(blockEntity instanceof ShulkerBoxBlockEntity shulkerBE)) {
                 return null;
             }
-            CompoundTag nbt = blockEntity.saveWithoutMetadata(blockEntity.getLevel().registryAccess());
+
+            // First, try to read from the block entity's component map
+            // Vanilla stores custom_data from items here when blocks are placed
+            DataComponentMap components = shulkerBE.components();
+            if (components != null) {
+                CustomData customData = components.get(DataComponents.CUSTOM_DATA);
+                if (customData != null) {
+                    ShulkerTrim trim = readTrimFromNbt(customData.copyTag());
+                    if (trim != null) {
+                        return trim;
+                    }
+                }
+            }
+
+            // Fallback: check the raw NBT (for Fabric compatibility)
+            CompoundTag nbt = shulkerBE.saveWithoutMetadata(level.registryAccess());
             return readTrimFromNbt(nbt);
         } catch (Exception e) {
+            e.printStackTrace();
             return null;
         }
     }
 
     /**
      * Write trim data to a placed shulker box block.
-     * Note: Due to API changes in 1.21.10, this relies on the snapshot update pattern.
+     * Sets the custom_data component on the block entity.
      */
     public static void writeTrimToBlock(ShulkerBox shulkerBox, @Nullable ShulkerTrim trim) {
-        if (!(shulkerBox instanceof CraftShulkerBox craftBox)) {
+        Block block = shulkerBox.getBlock();
+        if (!(block.getWorld() instanceof CraftWorld craftWorld)) {
             return;
         }
 
         try {
-            ShulkerBoxBlockEntity blockEntity = getBlockEntity(craftBox);
-            if (blockEntity == null || blockEntity.getLevel() == null) {
+            ServerLevel level = craftWorld.getHandle();
+            BlockPos pos = new BlockPos(block.getX(), block.getY(), block.getZ());
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+
+            if (!(blockEntity instanceof ShulkerBoxBlockEntity shulkerBE)) {
                 return;
             }
 
-            // Read current NBT, modify it, and write back using reflection
-            CompoundTag nbt = blockEntity.saveWithoutMetadata(blockEntity.getLevel().registryAccess());
+            // Get current custom_data from components, modify it, and set it back
+            DataComponentMap components = shulkerBE.components();
+            CustomData existingData = components != null ? components.get(DataComponents.CUSTOM_DATA) : null;
+            CompoundTag nbt = existingData != null ? existingData.copyTag() : new CompoundTag();
+
             writeTrimToNbt(nbt, trim);
 
-            // Try to load the modified NBT back
-            try {
-                // Try the older loadAdditional signature if available
-                Method loadMethod = ShulkerBoxBlockEntity.class.getMethod("loadAdditional",
-                    CompoundTag.class, net.minecraft.core.HolderLookup.Provider.class);
-                loadMethod.invoke(blockEntity, nbt, blockEntity.getLevel().registryAccess());
-            } catch (NoSuchMethodException e) {
-                // Fallback: mark as changed and hope the NBT is preserved
+            // Set the component on the block entity
+            if (nbt.isEmpty()) {
+                shulkerBE.setComponents(shulkerBE.components().filter(type -> type != DataComponents.CUSTOM_DATA));
+            } else {
+                // We need to create a new component map with our custom_data
+                shulkerBE.setComponents(
+                    DataComponentMap.builder()
+                        .addAll(shulkerBE.components())
+                        .set(DataComponents.CUSTOM_DATA, CustomData.of(nbt))
+                        .build()
+                );
             }
 
-            blockEntity.setChanged();
+            shulkerBE.setChanged();
+
+            // Force sync to clients
+            level.sendBlockUpdated(pos, shulkerBE.getBlockState(), shulkerBE.getBlockState(), 3);
         } catch (Exception e) {
-            // Silently fail - trim won't be saved to block
+            e.printStackTrace();
         }
-    }
-
-    /**
-     * Get the actual block entity from a CraftShulkerBox using reflection.
-     */
-    @Nullable
-    private static ShulkerBoxBlockEntity getBlockEntity(CraftShulkerBox craftBox) {
-        try {
-            // Try getTileEntity first (older API)
-            try {
-                Method method = craftBox.getClass().getMethod("getTileEntity");
-                return (ShulkerBoxBlockEntity) method.invoke(craftBox);
-            } catch (NoSuchMethodException ignored) {}
-
-            // Try to access the snapshot field from CraftBlockEntityState
-            Field snapshotField = findField(craftBox.getClass(), "snapshot");
-            if (snapshotField != null) {
-                snapshotField.setAccessible(true);
-                return (ShulkerBoxBlockEntity) snapshotField.get(craftBox);
-            }
-
-            // Try getSnapshot method
-            try {
-                Method method = craftBox.getClass().getMethod("getSnapshot");
-                return (ShulkerBoxBlockEntity) method.invoke(craftBox);
-            } catch (NoSuchMethodException ignored) {}
-
-            return null;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /**
-     * Find a field in class hierarchy.
-     */
-    @Nullable
-    private static Field findField(Class<?> clazz, String name) {
-        while (clazz != null) {
-            try {
-                return clazz.getDeclaredField(name);
-            } catch (NoSuchFieldException e) {
-                clazz = clazz.getSuperclass();
-            }
-        }
-        return null;
     }
 
     /**

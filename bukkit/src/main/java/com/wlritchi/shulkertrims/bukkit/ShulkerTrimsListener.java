@@ -1,6 +1,7 @@
 package com.wlritchi.shulkertrims.bukkit;
 
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
+import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.ShulkerBox;
@@ -10,6 +11,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.inventory.PrepareSmithingEvent;
+import org.bukkit.event.player.PlayerRegisterChannelEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.SmithingInventory;
 
@@ -18,12 +21,15 @@ import org.bukkit.inventory.SmithingInventory;
  * - Smithing table: Apply trims to shulker boxes
  * - Block place: Transfer trim from item to block entity
  * - Block break: Transfer trim from block entity to dropped item
+ * - Player join/chunk load: Sync trim data to Fabric clients
  */
 public class ShulkerTrimsListener implements Listener {
     private final ShulkerTrimsPlugin plugin;
+    private final TrimSyncNetwork network;
 
-    public ShulkerTrimsListener(ShulkerTrimsPlugin plugin) {
+    public ShulkerTrimsListener(ShulkerTrimsPlugin plugin, TrimSyncNetwork network) {
         this.plugin = plugin;
+        this.network = network;
     }
 
     /**
@@ -84,6 +90,11 @@ public class ShulkerTrimsListener implements Listener {
         // Transfer trim to block entity
         if (block.getState() instanceof ShulkerBox shulkerBox) {
             ShulkerTrimStorage.writeTrimToBlock(shulkerBox, trim);
+
+            // Sync to Fabric clients (run next tick to ensure block entity is saved)
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                network.sendTrimSync(block.getLocation(), trim);
+            }, 1L);
         }
     }
 
@@ -169,5 +180,37 @@ public class ShulkerTrimsListener implements Listener {
             case AMETHYST_SHARD -> "minecraft:amethyst";
             default -> null;
         };
+    }
+
+    /**
+     * When a player registers our channel (Fabric client), sync all loaded shulkers.
+     */
+    @EventHandler
+    public void onPlayerRegisterChannel(PlayerRegisterChannelEvent event) {
+        if (TrimSyncNetwork.CHANNEL.equals(event.getChannel())) {
+            // Player has our mod, sync all loaded trimmed shulkers
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                network.syncAllToPlayer(event.getPlayer());
+                plugin.getLogger().info("Synced trims to player: " + event.getPlayer().getName());
+            }, 20L); // Wait 1 second for chunks to load
+        }
+    }
+
+    /**
+     * When a chunk loads, sync any trimmed shulkers to nearby players.
+     */
+    @EventHandler
+    public void onChunkLoad(ChunkLoadEvent event) {
+        Chunk chunk = event.getChunk();
+
+        // Run async to avoid blocking chunk loading
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            for (org.bukkit.entity.Player player : chunk.getWorld().getPlayers()) {
+                // Only sync to players who have our channel registered
+                if (player.getListeningPluginChannels().contains(TrimSyncNetwork.CHANNEL)) {
+                    network.syncChunkToPlayer(player, chunk);
+                }
+            }
+        }, 5L);
     }
 }

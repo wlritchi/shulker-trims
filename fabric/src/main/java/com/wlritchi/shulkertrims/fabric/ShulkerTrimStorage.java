@@ -1,6 +1,8 @@
 package com.wlritchi.shulkertrims.fabric;
 
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.component.ComponentMap;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.item.ItemStack;
@@ -171,5 +173,37 @@ public final class ShulkerTrimStorage {
         WriteView trimView = data.get(TRIM_KEY);
         trimView.putString(PATTERN_KEY, trim.pattern());
         trimView.putString(MATERIAL_KEY, trim.material());
+    }
+
+    /**
+     * Read trim data from a block entity's components.
+     * This is used as a fallback when receiving data from non-Fabric servers
+     * that store trim in the custom_data component.
+     *
+     * @param blockEntity The block entity to read from
+     * @return The trim, or null if no valid trim data found
+     */
+    @Nullable
+    public static ShulkerTrim readTrimFromBlockEntityComponents(BlockEntity blockEntity) {
+        try {
+            ComponentMap components = blockEntity.getComponents();
+            if (components == null) {
+                return null;
+            }
+
+            // Check for custom_data component
+            NbtComponent customData = components.get(DataComponentTypes.CUSTOM_DATA);
+            if (customData != null) {
+                ShulkerTrim trim = readTrim(customData.copyNbt());
+                if (trim != null) {
+                    return trim;
+                }
+            }
+
+            return null;
+        } catch (Exception e) {
+            ShulkerTrimsMod.LOGGER.debug("Error reading trim from block entity components: {}", e.getMessage());
+            return null;
+        }
     }
 }
