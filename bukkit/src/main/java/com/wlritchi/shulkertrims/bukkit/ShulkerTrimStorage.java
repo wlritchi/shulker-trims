@@ -8,6 +8,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.equipment.trim.ArmorTrim;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import org.bukkit.block.Block;
@@ -97,9 +98,23 @@ public final class ShulkerTrimStorage {
             }
 
             // First, try to read from the block entity's component map
-            // Vanilla stores custom_data from items here when blocks are placed
             DataComponentMap components = shulkerBE.components();
             if (components != null) {
+                // Try minecraft:trim component (used by Fabric)
+                ArmorTrim armorTrim = components.get(DataComponents.TRIM);
+                if (armorTrim != null) {
+                    String pattern = armorTrim.pattern().unwrapKey()
+                        .map(key -> key.location().toString())
+                        .orElse(null);
+                    String material = armorTrim.material().unwrapKey()
+                        .map(key -> key.location().toString())
+                        .orElse(null);
+                    if (pattern != null && material != null) {
+                        return new ShulkerTrim(pattern, material);
+                    }
+                }
+
+                // Try custom_data component (Paper format)
                 CustomData customData = components.get(DataComponents.CUSTOM_DATA);
                 if (customData != null) {
                     ShulkerTrim trim = readTrimFromNbt(customData.copyTag());
@@ -109,7 +124,7 @@ public final class ShulkerTrimStorage {
                 }
             }
 
-            // Fallback: check the raw NBT (for Fabric compatibility)
+            // Fallback: check the raw NBT
             CompoundTag nbt = shulkerBE.saveWithoutMetadata(level.registryAccess());
             return readTrimFromNbt(nbt);
         } catch (Exception e) {
