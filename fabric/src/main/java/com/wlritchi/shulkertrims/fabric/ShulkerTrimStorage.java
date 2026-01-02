@@ -1,8 +1,6 @@
 package com.wlritchi.shulkertrims.fabric;
 
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.component.ComponentMap;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.item.ItemStack;
@@ -17,11 +15,12 @@ import java.util.Optional;
  * Utility for reading/writing ShulkerTrim data to NBT and ItemStacks.
  *
  * Storage strategy:
- * - Block entities: Store trim in block entity NBT (for mod-to-mod compatibility)
- * - Items: Store in minecraft:custom_data component (vanilla servers preserve this)
+ * - Items: Store in minecraft:custom_data component
+ * - Block entities: Vanilla transfers custom_data to BE components on placement
  *
- * When a shulker is placed, we read from the item's custom_data.
- * When a shulker is broken, we write to the dropped item's custom_data.
+ * When a shulker is placed, vanilla transfers custom_data to block entity components.
+ * readComponents() reads from the transferred component.
+ * When a shulker is broken, addComponents() writes trim back to custom_data.
  */
 public final class ShulkerTrimStorage {
     private ShulkerTrimStorage() {}
@@ -92,10 +91,10 @@ public final class ShulkerTrimStorage {
     @Nullable
     public static ShulkerTrim readTrimFromItem(ItemStack stack) {
         NbtComponent customData = stack.get(DataComponentTypes.CUSTOM_DATA);
-        if (customData == null) {
-            return null;
+        if (customData != null) {
+            return readTrim(customData.copyNbt());
         }
-        return readTrim(customData.copyNbt());
+        return null;
     }
 
     /**
@@ -175,35 +174,4 @@ public final class ShulkerTrimStorage {
         trimView.putString(MATERIAL_KEY, trim.material());
     }
 
-    /**
-     * Read trim data from a block entity's components.
-     * This is used as a fallback when receiving data from non-Fabric servers
-     * that store trim in the custom_data component.
-     *
-     * @param blockEntity The block entity to read from
-     * @return The trim, or null if no valid trim data found
-     */
-    @Nullable
-    public static ShulkerTrim readTrimFromBlockEntityComponents(BlockEntity blockEntity) {
-        try {
-            ComponentMap components = blockEntity.getComponents();
-            if (components == null) {
-                return null;
-            }
-
-            // Check for custom_data component
-            NbtComponent customData = components.get(DataComponentTypes.CUSTOM_DATA);
-            if (customData != null) {
-                ShulkerTrim trim = readTrim(customData.copyNbt());
-                if (trim != null) {
-                    return trim;
-                }
-            }
-
-            return null;
-        } catch (Exception e) {
-            ShulkerTrimsMod.LOGGER.debug("Error reading trim from block entity components: {}", e.getMessage());
-            return null;
-        }
-    }
 }

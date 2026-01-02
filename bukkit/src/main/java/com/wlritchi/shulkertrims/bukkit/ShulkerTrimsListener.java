@@ -87,15 +87,11 @@ public class ShulkerTrimsListener implements Listener {
             return;
         }
 
-        // Transfer trim to block entity
-        if (block.getState() instanceof ShulkerBox shulkerBox) {
-            ShulkerTrimStorage.writeTrimToBlock(shulkerBox, trim);
-
-            // Sync to Fabric clients (run next tick to ensure block entity is saved)
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                network.sendTrimSync(block.getLocation(), trim);
-            }, 1L);
-        }
+        // Sync to Fabric clients (run next tick to ensure block entity is saved)
+        // Note: vanilla transfers the minecraft:trim component from item to block automatically
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            network.sendTrimSync(block.getLocation(), trim);
+        }, 1L);
     }
 
     /**

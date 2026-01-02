@@ -12,11 +12,11 @@ import net.minecraft.recipe.IngredientPlacement;
 import net.minecraft.recipe.RecipeSerializer;
 import net.minecraft.recipe.SmithingRecipe;
 import net.minecraft.recipe.input.SmithingRecipeInput;
+import net.minecraft.item.equipment.trim.ArmorTrimMaterial;
+import net.minecraft.item.equipment.trim.ArmorTrimMaterials;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.item.equipment.trim.ArmorTrimMaterial;
-import net.minecraft.item.equipment.trim.ArmorTrimMaterials;
 import net.minecraft.util.Identifier;
 
 import java.util.List;
@@ -52,7 +52,6 @@ public class ShulkerTrimRecipe implements SmithingRecipe {
         if (patternName == null) {
             return ItemStack.EMPTY;
         }
-        String pattern = itemId.getNamespace() + ":" + patternName;
 
         // Get material from addition
         ItemStack additionStack = input.addition();
@@ -62,8 +61,9 @@ public class ShulkerTrimRecipe implements SmithingRecipe {
             return ItemStack.EMPTY;
         }
 
-        // Create result - copy base stack and apply trim
+        // Create result - copy base stack and apply trim to custom_data
         ItemStack result = baseStack.copyWithCount(1);
+        String pattern = itemId.getNamespace() + ":" + patternName;
         String material = materialEntry.get().getIdAsString();
         ShulkerTrim trim = new ShulkerTrim(pattern, material);
         ShulkerTrimStorage.writeTrimToItem(result, trim);

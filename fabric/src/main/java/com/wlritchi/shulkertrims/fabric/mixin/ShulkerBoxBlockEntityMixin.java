@@ -3,20 +3,17 @@ package com.wlritchi.shulkertrims.fabric.mixin;
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
 import com.wlritchi.shulkertrims.fabric.ShulkerTrimStorage;
 import com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox;
+import com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
-import net.minecraft.component.ComponentMap;
-import net.minecraft.component.ComponentsAccess;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
-import net.minecraft.item.equipment.trim.ArmorTrim;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.storage.ReadView;
 import net.minecraft.util.math.BlockPos;
-import java.util.Optional;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -24,8 +21,10 @@ import org.spongepowered.asm.mixin.Unique;
 /**
  * Mixin to add trim storage to ShulkerBoxBlockEntity.
  *
- * Storage uses the custom_data component for cross-platform compatibility with Paper.
- * Format: custom_data contains {"shulker_trims:trim": {"pattern": "...", "material": "..."}}
+ * Strategy: Let vanilla handle all component persistence (custom_data transfers
+ * automatically). We just read the trim from BE components when needed, and
+ * cache it for rendering performance. For client sync, we include the trim
+ * in the initial chunk data.
  */
 @Mixin(ShulkerBoxBlockEntity.class)
 public abstract class ShulkerBoxBlockEntityMixin extends BlockEntity implements TrimmedShulkerBox {
@@ -35,159 +34,64 @@ public abstract class ShulkerBoxBlockEntityMixin extends BlockEntity implements 
     }
 
     @Unique
-    private @Nullable ShulkerTrim shulkerTrims$trim;
+    private @Nullable ShulkerTrim shulkerTrims$cachedTrim;
+
+    @Unique
+    private boolean shulkerTrims$trimLoaded = false;
 
     @Override
     public @Nullable ShulkerTrim shulkerTrims$getTrim() {
-        return this.shulkerTrims$trim;
+        // Lazy-load trim from BE components
+        if (!this.shulkerTrims$trimLoaded) {
+            this.shulkerTrims$trimLoaded = true;
+            NbtComponent customData = this.getComponents().get(DataComponentTypes.CUSTOM_DATA);
+            if (customData != null) {
+                this.shulkerTrims$cachedTrim = ShulkerTrimStorage.readTrim(customData.copyNbt());
+                ShulkerTrimsMod.LOGGER.info("Lazy-loaded trim from BE components: {}", this.shulkerTrims$cachedTrim);
+            }
+        }
+        return this.shulkerTrims$cachedTrim;
     }
 
     @Override
     public void shulkerTrims$setTrim(@Nullable ShulkerTrim trim) {
-        this.shulkerTrims$trim = trim;
-        // Also update the custom_data component for cross-platform persistence
-        shulkerTrims$updateCustomDataComponent();
-    }
-
-    /**
-     * Updates the custom_data component on the block entity to include our trim data.
-     * This ensures the trim is serialized in the components section of the NBT,
-     * which is preserved by both Fabric and Paper servers.
-     */
-    @Unique
-    private void shulkerTrims$updateCustomDataComponent() {
-        // Get existing custom_data or create new
-        NbtCompound nbt = new NbtCompound();
-        ComponentMap existing = this.getComponents();
-        if (existing != null) {
-            NbtComponent existingCustomData = existing.get(DataComponentTypes.CUSTOM_DATA);
-            if (existingCustomData != null) {
-                nbt = existingCustomData.copyNbt();
-            }
-        }
-
-        if (this.shulkerTrims$trim != null) {
-            // Add our trim data
-            ShulkerTrimStorage.writeTrim(nbt, this.shulkerTrims$trim);
-        } else {
-            // Remove our trim data
-            nbt.remove(ShulkerTrimStorage.TRIM_KEY);
-        }
-
-        // Build new component map with updated custom_data
-        ComponentMap.Builder builder = ComponentMap.builder();
-        if (existing != null) {
-            builder.addAll(existing);
-        }
-
-        // Add or update custom_data (overwrites if already present from addAll)
-        if (!nbt.isEmpty()) {
-            builder.add(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
-        }
-
-        this.setComponents(builder.build());
+        this.shulkerTrims$cachedTrim = trim;
+        this.shulkerTrims$trimLoaded = true;
         this.markDirty();
     }
 
     /**
-     * Read trim from item's components when block is placed.
-     */
-    @Override
-    protected void readComponents(ComponentsAccess components) {
-        super.readComponents(components);
-
-        // Try reading from custom_data component first
-        NbtComponent customData = components.get(DataComponentTypes.CUSTOM_DATA);
-        if (customData != null) {
-            ShulkerTrim trim = ShulkerTrimStorage.readTrim(customData.copyNbt());
-            if (trim != null) {
-                shulkerTrims$setTrim(trim);
-                return;
-            }
-        }
-
-        // Try reading from minecraft:trim component (vanilla armor trim format)
-        ArmorTrim armorTrim = components.get(DataComponentTypes.TRIM);
-        if (armorTrim != null) {
-            String pattern = armorTrim.pattern().getIdAsString();
-            String material = armorTrim.material().getIdAsString();
-            shulkerTrims$setTrim(new ShulkerTrim(pattern, material));
-        }
-    }
-
-    /**
-     * Write trim to custom_data component when block entity saves.
-     */
-    @Override
-    protected void addComponents(ComponentMap.Builder builder) {
-        super.addComponents(builder);
-        if (this.shulkerTrims$trim != null) {
-            // Get existing custom_data or create new
-            NbtCompound nbt = new NbtCompound();
-
-            // Try to preserve existing custom_data content
-            ComponentMap existing = this.getComponents();
-            if (existing != null) {
-                NbtComponent existingCustomData = existing.get(DataComponentTypes.CUSTOM_DATA);
-                if (existingCustomData != null) {
-                    nbt = existingCustomData.copyNbt();
-                }
-            }
-
-            // Add our trim data
-            ShulkerTrimStorage.writeTrim(nbt, this.shulkerTrims$trim);
-            builder.add(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
-        }
-    }
-
-    /**
-     * Override toInitialChunkDataNbt to include trim data in client sync.
+     * Include trim data in client sync packet.
+     * Client doesn't have access to BE components, so we send trim in NBT.
      */
     @Override
     public NbtCompound toInitialChunkDataNbt(RegistryWrapper.WrapperLookup registryLookup) {
-        NbtCompound nbt = new NbtCompound();
-        if (this.shulkerTrims$trim != null) {
-            ShulkerTrimStorage.writeTrim(nbt, this.shulkerTrims$trim);
+        NbtCompound nbt = super.toInitialChunkDataNbt(registryLookup);
+        ShulkerTrim trim = this.shulkerTrims$getTrim();
+        if (trim != null) {
+            ShulkerTrimsMod.LOGGER.info("toInitialChunkDataNbt: adding trim {} to sync data", trim);
+            ShulkerTrimStorage.writeTrim(nbt, trim);
         }
         return nbt;
     }
 
     /**
-     * Read trim from disk when block entity loads.
-     * Components are NOT yet loaded when readData is called, so we read directly from NBT.
+     * Read trim from sync NBT on client, or from components on disk load.
      */
     @Override
     protected void readData(ReadView data) {
         super.readData(data);
 
-        // Try reading from NBT path: components -> minecraft:trim
-        Optional<ReadView> componentsOpt = data.getOptionalReadView("components");
-        if (componentsOpt.isPresent()) {
-            ReadView componentsView = componentsOpt.get();
+        // Reset cache - will be lazy-loaded from components
+        this.shulkerTrims$trimLoaded = false;
+        this.shulkerTrims$cachedTrim = null;
 
-            // Try minecraft:trim component (vanilla armor trim format)
-            Optional<ReadView> trimOpt = componentsView.getOptionalReadView("minecraft:trim");
-            if (trimOpt.isPresent()) {
-                ReadView trimView = trimOpt.get();
-                Optional<String> patternOpt = trimView.getOptionalString("pattern");
-                Optional<String> materialOpt = trimView.getOptionalString("material");
-                if (patternOpt.isPresent() && materialOpt.isPresent()) {
-                    this.shulkerTrims$trim = new ShulkerTrim(patternOpt.get(), materialOpt.get());
-                    return;
-                }
-            }
-
-            // Try minecraft:custom_data component (Paper format)
-            Optional<ReadView> customDataOpt = componentsView.getOptionalReadView("minecraft:custom_data");
-            if (customDataOpt.isPresent()) {
-                this.shulkerTrims$trim = ShulkerTrimStorage.readTrimFromData(customDataOpt.get());
-                if (this.shulkerTrims$trim != null) {
-                    return;
-                }
-            }
+        // Check for sync data (top-level NBT from toInitialChunkDataNbt)
+        ShulkerTrim syncTrim = ShulkerTrimStorage.readTrimFromData(data);
+        if (syncTrim != null) {
+            ShulkerTrimsMod.LOGGER.info("readData: found sync trim: {}", syncTrim);
+            this.shulkerTrims$cachedTrim = syncTrim;
+            this.shulkerTrims$trimLoaded = true;
         }
-
-        // Fallback: top-level NBT (client sync format)
-        this.shulkerTrims$trim = ShulkerTrimStorage.readTrimFromData(data);
     }
 }
