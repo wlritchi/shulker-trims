@@ -23,5 +23,8 @@ run-server-fabric/
 
 *.log
 
+# Reference textures (design aids, not for distribution)
+**/assets/**/reference_*
+
 # Compiled
 *.class
