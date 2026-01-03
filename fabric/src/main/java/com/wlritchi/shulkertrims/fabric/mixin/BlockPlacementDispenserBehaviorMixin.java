@@ -63,6 +63,9 @@ public class BlockPlacementDispenserBehaviorMixin {
             shulkerBE instanceof TrimmedShulkerBox trimmed) {
             trimmed.shulkerTrims$setTrim(trim);
             blockEntity.markDirty();
+
+            // Trigger client sync by updating the block state
+            world.updateListeners(targetPos, targetState, targetState, net.minecraft.block.Block.NOTIFY_LISTENERS);
         }
     }
 }

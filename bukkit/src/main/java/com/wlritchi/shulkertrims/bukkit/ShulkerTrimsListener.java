@@ -8,7 +8,10 @@ import org.bukkit.block.ShulkerBox;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.block.data.Directional;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockDispenseEvent;
+import org.bukkit.event.block.BlockDropItemEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.inventory.PrepareSmithingEvent;
 import org.bukkit.event.player.PlayerRegisterChannelEvent;
@@ -19,7 +22,7 @@ import org.bukkit.inventory.SmithingInventory;
 /**
  * Handles events for shulker box trim functionality:
  * - Smithing table: Apply trims to shulker boxes
- * - Block place: Transfer trim from item to block entity
+ * - Block place/dispenser: Sync trim data to Fabric clients
  * - Block break: Transfer trim from block entity to dropped item
  * - Player join/chunk load: Sync trim data to Fabric clients
  */
@@ -72,7 +75,8 @@ public class ShulkerTrimsListener implements Listener {
     }
 
     /**
-     * When a shulker box is placed, transfer trim from item to block entity.
+     * When a shulker box is placed, sync trim to Fabric clients.
+     * Note: Vanilla handles component transfer from item to block entity.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockPlace(BlockPlaceEvent event) {
@@ -88,16 +92,45 @@ public class ShulkerTrimsListener implements Listener {
         }
 
         // Sync to Fabric clients (run next tick to ensure block entity is saved)
-        // Note: vanilla transfers the minecraft:trim component from item to block automatically
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             network.sendTrimSync(block.getLocation(), trim);
         }, 1L);
     }
 
     /**
-     * When a shulker box is broken, transfer trim from block entity to dropped item.
-     * Note: This uses MONITOR priority and the actual item modification happens via
-     * the BlockDropItemEvent for proper handling.
+     * When a dispenser places a shulker box, sync trim to Fabric clients.
+     * BlockPlaceEvent only fires for player placement, so we need this for dispensers.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockDispense(BlockDispenseEvent event) {
+        ItemStack item = event.getItem();
+        if (!isShulkerBox(item.getType())) {
+            return;
+        }
+
+        ShulkerTrim trim = ShulkerTrimStorage.readTrimFromItem(item);
+        if (trim == null) {
+            return;
+        }
+
+        // Calculate where the shulker will be placed
+        Block dispenser = event.getBlock();
+        if (!(dispenser.getBlockData() instanceof Directional directional)) {
+            return;
+        }
+
+        Block targetBlock = dispenser.getRelative(directional.getFacing());
+
+        // Sync to Fabric clients after block is placed (give it a couple ticks)
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (isShulkerBox(targetBlock.getType())) {
+                network.sendTrimSync(targetBlock.getLocation(), trim);
+            }
+        }, 2L);
+    }
+
+    /**
+     * When a shulker box is broken, capture trim for transfer to dropped item.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
@@ -111,7 +144,6 @@ public class ShulkerTrimsListener implements Listener {
             ShulkerTrim trim = ShulkerTrimStorage.readTrimFromBlock(shulkerBox);
             if (trim != null) {
                 // Store trim temporarily for BlockDropItemEvent
-                // The drop event will apply the trim to the dropped item
                 block.setMetadata("shulker_trims:pending_trim",
                     new org.bukkit.metadata.FixedMetadataValue(plugin,
                         trim.pattern() + "|" + trim.material()));
@@ -123,7 +155,7 @@ public class ShulkerTrimsListener implements Listener {
      * Apply pending trim to dropped shulker box items.
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onBlockDropItem(org.bukkit.event.block.BlockDropItemEvent event) {
+    public void onBlockDropItem(BlockDropItemEvent event) {
         Block block = event.getBlock();
         if (!block.hasMetadata("shulker_trims:pending_trim")) {
             return;

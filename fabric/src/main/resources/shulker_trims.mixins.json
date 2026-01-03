@@ -3,7 +3,6 @@
   "package": "com.wlritchi.shulkertrims.fabric.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "BlockItemMixin",
     "BlockPlacementDispenserBehaviorMixin",
     "ShulkerBoxBlockEntityMixin",
     "ShulkerBoxBlockMixin"

@@ -32,7 +32,6 @@ public class ShulkerBoxBlockMixin {
         }
 
         // Get the block entity from the loot context
-        // The BLOCK_ENTITY parameter contains the block entity being broken
         var blockEntity = builder.getOptional(LootContextParameters.BLOCK_ENTITY);
         if (blockEntity == null || !(blockEntity instanceof ShulkerBoxBlockEntity shulkerBE)) {
             return;

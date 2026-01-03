@@ -3,7 +3,6 @@ package com.wlritchi.shulkertrims.fabric.mixin;
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
 import com.wlritchi.shulkertrims.fabric.ShulkerTrimStorage;
 import com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox;
-import com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
@@ -11,6 +10,9 @@ import net.minecraft.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.network.packet.Packet;
+import net.minecraft.network.listener.ClientPlayPacketListener;
+import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
 import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.storage.ReadView;
 import net.minecraft.util.math.BlockPos;
@@ -47,7 +49,6 @@ public abstract class ShulkerBoxBlockEntityMixin extends BlockEntity implements 
             NbtComponent customData = this.getComponents().get(DataComponentTypes.CUSTOM_DATA);
             if (customData != null) {
                 this.shulkerTrims$cachedTrim = ShulkerTrimStorage.readTrim(customData.copyNbt());
-                ShulkerTrimsMod.LOGGER.info("Lazy-loaded trim from BE components: {}", this.shulkerTrims$cachedTrim);
             }
         }
         return this.shulkerTrims$cachedTrim;
@@ -69,10 +70,17 @@ public abstract class ShulkerBoxBlockEntityMixin extends BlockEntity implements 
         NbtCompound nbt = super.toInitialChunkDataNbt(registryLookup);
         ShulkerTrim trim = this.shulkerTrims$getTrim();
         if (trim != null) {
-            ShulkerTrimsMod.LOGGER.info("toInitialChunkDataNbt: adding trim {} to sync data", trim);
             ShulkerTrimStorage.writeTrim(nbt, trim);
         }
         return nbt;
+    }
+
+    /**
+     * Return update packet for runtime block entity syncs (e.g., dispenser placement).
+     */
+    @Override
+    public Packet<ClientPlayPacketListener> toUpdatePacket() {
+        return BlockEntityUpdateS2CPacket.create(this);
     }
 
     /**
@@ -89,7 +97,6 @@ public abstract class ShulkerBoxBlockEntityMixin extends BlockEntity implements 
         // Check for sync data (top-level NBT from toInitialChunkDataNbt)
         ShulkerTrim syncTrim = ShulkerTrimStorage.readTrimFromData(data);
         if (syncTrim != null) {
-            ShulkerTrimsMod.LOGGER.info("readData: found sync trim: {}", syncTrim);
             this.shulkerTrims$cachedTrim = syncTrim;
             this.shulkerTrims$trimLoaded = true;
         }

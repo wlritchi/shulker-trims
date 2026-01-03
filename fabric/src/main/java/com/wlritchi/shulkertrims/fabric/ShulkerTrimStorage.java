@@ -6,7 +6,6 @@ import net.minecraft.component.type.NbtComponent;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.storage.ReadView;
-import net.minecraft.storage.WriteView;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
@@ -155,23 +154,6 @@ public final class ShulkerTrimStorage {
         }
 
         return trim;
-    }
-
-    /**
-     * Write trim data to a WriteView (1.21.10+ block entity data format).
-     *
-     * @param data The WriteView to write to
-     * @param trim The trim to write, or null to remove existing trim data
-     */
-    public static void writeTrimToData(WriteView data, @Nullable ShulkerTrim trim) {
-        if (trim == null) {
-            data.remove(TRIM_KEY);
-            return;
-        }
-
-        WriteView trimView = data.get(TRIM_KEY);
-        trimView.putString(PATTERN_KEY, trim.pattern());
-        trimView.putString(MATERIAL_KEY, trim.material());
     }
 
 }
