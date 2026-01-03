@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Shulker Trims is a Minecraft mod that adds the ability to apply armor trim patterns to shulker boxes via the smithing table. It targets Minecraft 1.21.10+ and supports both Fabric (client + server) and Bukkit/Paper (server-only plugin).
+Shulker Trims is a Minecraft mod that adds the ability to apply armor trim patterns to shulker boxes via the smithing table. It targets Minecraft 1.21.10 and supports both Fabric (client + server) and Bukkit/Paper (server-only plugin).
 
 ## Build Commands
 
@@ -16,9 +16,9 @@ Shulker Trims is a Minecraft mod that adds the ability to apply armor trim patte
 ```
 
 Output JARs:
-- `fabric/build/libs/shulker-trims-fabric-1.0.0.jar` — Fabric-only mod
-- `bukkit/build/libs/shulker-trims-bukkit-1.0.0.jar` — Bukkit-only plugin
-- `build/forgix/shulker-trims-1.0.0-bukkit-fabric.jar` — Universal JAR (works on both platforms)
+- `fabric/build/libs/shulker-trims-mc1.21.10-fabric-1.0.0.jar` — Fabric-only mod
+- `bukkit/build/libs/shulker-trims-mc1.21.10-bukkit-1.0.0.jar` — Bukkit-only plugin
+- `build/forgix/shulker-trims-1.0.0-mc1.21.10.jar` — Universal JAR (works on both platforms)
 
 ### Universal JAR
 

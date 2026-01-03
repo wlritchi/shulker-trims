@@ -11,12 +11,17 @@ plugins {
 group = property("maven_group")!!
 version = property("mod_version")!!
 
+base {
+    archivesName.set(property("archives_base_name").toString())
+}
+
 forgix {
+    archiveClassifier = "mc${property("minecraft_version")}"
     merge("fabric") {
-        inputJar.set(layout.projectDirectory.file("fabric/build/libs/shulker-trims-fabric-${property("mod_version")}.jar"))
+        inputJar.set(layout.projectDirectory.file("fabric/build/libs/${property("archives_base_name")}-fabric-${property("mod_version")}.jar"))
     }
     merge("bukkit") {
-        inputJar.set(layout.projectDirectory.file("bukkit/build/libs/shulker-trims-bukkit-${property("mod_version")}.jar"))
+        inputJar.set(layout.projectDirectory.file("bukkit/build/libs/${property("archives_base_name")}-bukkit-${property("mod_version")}.jar"))
     }
 }
 
