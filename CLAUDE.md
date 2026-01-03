@@ -9,15 +9,22 @@ Shulker Trims is a Minecraft mod that adds the ability to apply armor trim patte
 ## Build Commands
 
 ```bash
-./gradlew build           # Build all modules
+./gradlew build           # Build all modules + universal JAR
 ./gradlew :fabric:build   # Build Fabric mod only
 ./gradlew :bukkit:build   # Build Bukkit plugin only
 ./gradlew :fabric:genSources  # Generate Minecraft sources for IDE support
 ```
 
 Output JARs:
-- `fabric/build/libs/shulker-trims-fabric-1.0.0.jar`
-- `bukkit/build/libs/shulker-trims-bukkit-1.0.0.jar`
+- `fabric/build/libs/shulker-trims-fabric-1.0.0.jar` — Fabric-only mod
+- `bukkit/build/libs/shulker-trims-bukkit-1.0.0.jar` — Bukkit-only plugin
+- `build/forgix/shulker-trims-1.0.0-bukkit-fabric.jar` — Universal JAR (works on both platforms)
+
+### Universal JAR
+
+The universal JAR is built using [Forgix](https://github.com/PacifistMC/Forgix), which merges the Fabric mod and Bukkit plugin into a single distributable. It works by isolating platform-specific classes with renamed packages and including both `fabric.mod.json` and `plugin.yml` in the JAR root.
+
+Drop the universal JAR into either a Fabric `mods/` folder or a Paper `plugins/` folder — the appropriate loader will use its entry point.
 
 ## Architecture
 
