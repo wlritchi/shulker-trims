@@ -80,3 +80,27 @@ jobs:
           mc-runtime-test: fabric
           java: ${{ env.java_version }}
           cache-mc: github
+
+  paper-runtime-test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.java_version }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.java_version }}
+          distribution: temurin
+
+      - name: Download Bukkit plugin artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bukkit-plugin
+          path: plugin
+
+      - name: Run Paper runtime test
+        run: |
+          PLUGIN_JAR=$(ls plugin/*.jar | head -1)
+          .github/scripts/paper-runtime-test.sh "$PLUGIN_JAR" 1.21.10

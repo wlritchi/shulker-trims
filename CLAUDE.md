@@ -67,4 +67,31 @@ Client-side (`shulker_trims.client.mixins.json`):
 - `run-server/` - Paper test server
 - `run-server-fabric/` - Fabric test server
 
-No automated tests exist; manual testing covers recipe crafting, place/break cycles, dispenser/piston/explosion interactions, and cross-platform world transfers.
+Manual testing covers recipe crafting, place/break cycles, dispenser/piston/explosion interactions, and cross-platform world transfers.
+
+## CI Testing
+
+The CI workflow (`.github/workflows/ci.yml`) runs automated runtime tests for both platforms:
+
+### Fabric Runtime Test
+Uses [headlesshq/mc-runtime-test](https://github.com/headlesshq/mc-runtime-test) to verify the mod loads on a headless Minecraft client.
+
+### Paper Runtime Test
+Uses a custom script (`.github/scripts/paper-runtime-test.sh`) that:
+1. Downloads the latest Paper build for MC 1.21.10 from the official API
+2. Configures a minimal server with the plugin installed
+3. Starts the server and waits for the "Done" message
+4. Verifies the plugin enabled successfully (checks for `[ShulkerTrims] Enabling ShulkerTrims`)
+5. Checks for NMS compatibility errors (NoSuchMethodError, ClassNotFoundException, etc.)
+6. Fails CI if the plugin doesn't load correctly
+
+Run locally:
+```bash
+./gradlew :bukkit:build
+.github/scripts/paper-runtime-test.sh bukkit/build/libs/shulker-trims-mc1.21.10-bukkit-1.0.0.jar 1.21.10
+```
+
+**Caveats:**
+- The Paper runtime test only verifies plugin initialization, not gameplay mechanics
+- NMS code compatibility is version-specific; the test catches reflection/method errors on startup
+- Server startup takes ~20-30 seconds including world generation
