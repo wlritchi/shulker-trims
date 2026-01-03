@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "shulker_trims_test",
+  "version": "1.0.0",
+  "name": "Shulker Trims Tests",
+  "description": "GameTest tests for Shulker Trims mod",
+  "authors": ["wlritchi"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": [
+      "com.wlritchi.shulkertrims.fabric.test.ShulkerTrimsGameTest"
+    ]
+  },
+  "depends": {
+    "shulker_trims": "*",
+    "fabricloader": ">=0.16.0",
+    "minecraft": "1.21.10",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

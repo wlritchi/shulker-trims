@@ -17,6 +17,15 @@ loom {
     }
 }
 
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "shulker_trims_test"
+        enableGameTests = true
+        eula = true
+    }
+}
+
 repositories {
     maven("https://maven.fabricmc.net/")
 }

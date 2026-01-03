@@ -87,7 +87,7 @@ public abstract class ShulkerBoxBlockEntityMixin extends BlockEntity implements 
      * Read trim from sync NBT on client, or from components on disk load.
      */
     @Override
-    protected void readData(ReadView data) {
+    public void readData(ReadView data) {
         super.readData(data);
 
         // Reset cache - will be lazy-loaded from components
