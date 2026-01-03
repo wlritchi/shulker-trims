@@ -10,6 +10,9 @@
   "entrypoints": {
     "fabric-gametest": [
       "com.wlritchi.shulkertrims.fabric.test.ShulkerTrimsGameTest"
+    ],
+    "fabric-client-gametest": [
+      "com.wlritchi.shulkertrims.fabric.test.ShulkerTrimsClientGameTest"
     ]
   },
   "depends": {

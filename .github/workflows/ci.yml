@@ -104,3 +104,46 @@ jobs:
         run: |
           PLUGIN_JAR=$(ls plugin/*.jar | head -1)
           .github/scripts/paper-runtime-test.sh "$PLUGIN_JAR" 1.21.10
+
+  fabric-client-gametest:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.java_version }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.java_version }}
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Install XVFB
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Run production client gametest
+        run: ./gradlew :fabric:runProductionClientGameTest
+
+      - name: Upload test screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: client-gametest-screenshots
+          path: |
+            fabric/build/run/clientGameTest/screenshots
+            build/run/clientGameTest/screenshots
+          if-no-files-found: warn
+
+      - name: Store test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-gametest-reports
+          path: |
+            **/build/reports/
+            **/build/test-results/
+            fabric/build/run/clientGameTest/logs

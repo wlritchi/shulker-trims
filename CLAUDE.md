@@ -67,14 +67,38 @@ Client-side (`shulker_trims.client.mixins.json`):
 - `run-server/` - Paper test server
 - `run-server-fabric/` - Fabric test server
 
+## Automated Testing
+
+### Server GameTests (Fabric)
+
+Server-side game tests verify trim data storage and manipulation:
+- Located in `fabric/src/gametest/java/`
+- Run automatically with `./gradlew :fabric:build`
+- Tests cover smithing recipes, block placement/breaking, dispenser behavior, etc.
+
+### Client GameTests (Fabric)
+
+Client-side game tests verify trim rendering on shulker boxes:
+- Located in `fabric/src/gametest/java/` (class: `ShulkerTrimsClientGameTest`)
+- Tests create singleplayer worlds, place trimmed shulkers, and take screenshots
+- Run with `./gradlew :fabric:runClientGameTest` (requires display)
+- Run with `./gradlew :fabric:runProductionClientGameTest` (uses XVFB in CI)
+
+Screenshots are saved to `fabric/build/run/clientGameTest/screenshots/`
+
+### Manual Testing
+
 Manual testing covers recipe crafting, place/break cycles, dispenser/piston/explosion interactions, and cross-platform world transfers.
 
 ## CI Testing
 
-The CI workflow (`.github/workflows/ci.yml`) runs automated runtime tests for both platforms:
+The CI workflow (`.github/workflows/ci.yml`) runs automated tests for both platforms:
 
 ### Fabric Runtime Test
 Uses [headlesshq/mc-runtime-test](https://github.com/headlesshq/mc-runtime-test) to verify the mod loads on a headless Minecraft client.
+
+### Fabric Client GameTest
+Runs client-side rendering tests using XVFB (X Virtual Frame Buffer) for headless screenshot capture. Screenshots are uploaded as CI artifacts for manual inspection.
 
 ### Paper Runtime Test
 Uses a custom script (`.github/scripts/paper-runtime-test.sh`) that:
