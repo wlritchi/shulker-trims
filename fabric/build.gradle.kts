@@ -187,3 +187,13 @@ tasks.processResources {
         expand("version" to project.version)
     }
 }
+
+// Don't run game tests as part of the standard build - they're slow.
+// Use ./gradlew slowTest to run them explicitly.
+afterEvaluate {
+    tasks.named("test") {
+        setDependsOn(dependsOn.filterNot { dep ->
+            dep.toString().contains("runGameTest")
+        })
+    }
+}

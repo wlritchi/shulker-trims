@@ -82,6 +82,14 @@ tasks.named("build") {
     dependsOn("fixMergedJarManifest")
 }
 
+// Aggregates slow tests that shouldn't run on every build.
+// CI should run: ./gradlew build slowTest
+tasks.register("slowTest") {
+    group = "verification"
+    description = "Runs slow tests (game tests, integration tests, etc.)"
+    dependsOn(":fabric:runGameTest")
+}
+
 subprojects {
     apply(plugin = "java")
 

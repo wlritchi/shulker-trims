@@ -10,6 +10,7 @@ Shulker Trims is a Minecraft mod that adds the ability to apply armor trim patte
 
 ```bash
 ./gradlew build           # Build all modules + universal JAR
+./gradlew slowTest        # Run slow tests (game tests, etc.) - not included in build
 ./gradlew :fabric:build   # Build Fabric mod only
 ./gradlew :bukkit:build   # Build Bukkit plugin only
 ./gradlew :fabric:genSources  # Generate Minecraft sources for IDE support
@@ -73,7 +74,7 @@ Client-side (`shulker_trims.client.mixins.json`):
 
 Server-side game tests verify trim data storage and manipulation:
 - Located in `fabric/src/gametest/java/`
-- Run automatically with `./gradlew :fabric:build`
+- Run with `./gradlew slowTest` or `./gradlew :fabric:runGameTest`
 - Tests cover smithing recipes, block placement/breaking, dispenser behavior, etc.
 
 ### Client GameTests (Fabric)
