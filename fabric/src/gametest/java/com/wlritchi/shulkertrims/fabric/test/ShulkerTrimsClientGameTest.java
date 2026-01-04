@@ -6,6 +6,8 @@ import com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.fabric.api.client.gametest.v1.screenshot.TestScreenshotComparisonAlgorithm;
+import net.fabricmc.fabric.api.client.gametest.v1.screenshot.TestScreenshotComparisonOptions;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
@@ -25,7 +27,15 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li>Create singleplayer worlds</li>
  *   <li>Place trimmed shulker boxes</li>
- *   <li>Take screenshots for visual verification</li>
+ *   <li>Take screenshots and compare against golden template images</li>
+ * </ul>
+ *
+ * <p><b>Golden Image Workflow:</b>
+ * <ul>
+ *   <li>Template images are stored in {@code fabric/src/gametest/resources/templates/}</li>
+ *   <li>If a template doesn't exist, the test will save the captured screenshot as the new template</li>
+ *   <li>To update templates: delete the existing template and re-run the test</li>
+ *   <li>Uses Mean Squared Difference algorithm with 1% tolerance for GPU/driver variations</li>
  * </ul>
  */
 @SuppressWarnings("UnstableApiUsage")
@@ -38,6 +48,15 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
     private static final String COPPER_MATERIAL = "minecraft:copper";
     private static final String SENTRY_PATTERN = "minecraft:sentry";
     private static final String GOLD_MATERIAL = "minecraft:gold";
+
+    /**
+     * Mean Squared Difference threshold for screenshot comparison.
+     * 0.01 (1%) provides tolerance for minor GPU/driver rendering differences
+     * while still catching significant visual regressions.
+     * Default Fabric threshold is 0.005 (0.5%), but CI environments with
+     * XVFB may have slightly more variation.
+     */
+    private static final float COMPARISON_THRESHOLD = 0.01f;
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -108,9 +127,10 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
             );
             context.waitTicks(10);
 
-            // Take screenshot
-            context.takeScreenshot("shulker-trim-world-wild-copper");
-            LOGGER.info("Screenshot taken: shulker-trim-world-wild-copper");
+            // Compare screenshot against golden template image
+            // If template doesn't exist, it will be created automatically
+            assertScreenshotMatchesTemplate(context, "shulker-trim-world-wild-copper");
+            LOGGER.info("Screenshot comparison passed: shulker-trim-world-wild-copper");
         }
     }
 
@@ -150,9 +170,9 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
             context.waitForScreen(InventoryScreen.class);
             context.waitTicks(5); // Allow screen to fully render
 
-            // Take screenshot of inventory
-            context.takeScreenshot("shulker-trim-inventory-wild-copper");
-            LOGGER.info("Screenshot taken: shulker-trim-inventory-wild-copper");
+            // Compare screenshot against golden template image
+            assertScreenshotMatchesTemplate(context, "shulker-trim-inventory-wild-copper");
+            LOGGER.info("Screenshot comparison passed: shulker-trim-inventory-wild-copper");
 
             // Close inventory
             context.runOnClient(client -> client.setScreen(null));
@@ -209,9 +229,9 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
             );
             context.waitTicks(10);
 
-            // Take comparison screenshot
-            context.takeScreenshot("shulker-trim-multiple-patterns");
-            LOGGER.info("Screenshot taken: shulker-trim-multiple-patterns");
+            // Compare screenshot against golden template image
+            assertScreenshotMatchesTemplate(context, "shulker-trim-multiple-patterns");
+            LOGGER.info("Screenshot comparison passed: shulker-trim-multiple-patterns");
 
             // Also give player multiple trimmed shulkers for inventory comparison
             singleplayer.getServer().runOnServer(server -> {
@@ -252,12 +272,32 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
             context.waitForScreen(InventoryScreen.class);
             context.waitTicks(5);
 
-            context.takeScreenshot("shulker-trim-inventory-multiple");
-            LOGGER.info("Screenshot taken: shulker-trim-inventory-multiple");
+            // Compare screenshot against golden template image
+            assertScreenshotMatchesTemplate(context, "shulker-trim-inventory-multiple");
+            LOGGER.info("Screenshot comparison passed: shulker-trim-inventory-multiple");
 
             context.runOnClient(client -> client.setScreen(null));
             context.waitForScreen(null);
         }
+    }
+
+    /**
+     * Asserts that a screenshot matches the golden template image.
+     *
+     * <p>Uses Mean Squared Difference algorithm with configurable tolerance to handle
+     * minor GPU/driver rendering variations while still catching significant visual regressions.
+     *
+     * <p>If the template image doesn't exist, the screenshot will be saved as the new template.
+     * This enables easy initial template generation by simply running the tests.
+     *
+     * @param context the client game test context
+     * @param templateName the name of the template image (without extension)
+     */
+    private void assertScreenshotMatchesTemplate(ClientGameTestContext context, String templateName) {
+        TestScreenshotComparisonOptions options = TestScreenshotComparisonOptions.of(templateName + ".png")
+                .withAlgorithm(TestScreenshotComparisonAlgorithm.meanSquaredDifference(COMPARISON_THRESHOLD))
+                .save(); // Also save the actual screenshot for debugging comparison failures
+        context.assertScreenshotEquals(options);
     }
 
     /**

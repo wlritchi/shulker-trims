@@ -1,0 +1,13 @@
+# Golden image templates for client game tests
+#
+# Template images are stored here and compared against during test runs.
+# The Fabric Client Game Test API uses these as reference images.
+#
+# To generate/update templates:
+# 1. Delete the template file(s) you want to regenerate
+# 2. Run: ./gradlew :fabric:runClientGameTest
+# 3. The new templates will be saved here automatically
+# 4. Review the generated images and commit them
+#
+# Template comparison uses Mean Squared Difference with 1% tolerance
+# to handle minor GPU/driver rendering variations.

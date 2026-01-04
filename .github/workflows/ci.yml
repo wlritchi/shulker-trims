@@ -138,6 +138,17 @@ jobs:
             build/run/clientGameTest/screenshots
           if-no-files-found: warn
 
+      # Upload generated templates when they don't exist yet (for initial setup)
+      # When templates are missing, Fabric saves screenshots to the templates directory
+      # These can be downloaded and committed to the repository
+      - name: Upload generated templates (if any)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: generated-templates
+          path: fabric/src/gametest/resources/templates/*.png
+          if-no-files-found: ignore
+
       - name: Store test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
