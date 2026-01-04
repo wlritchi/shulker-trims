@@ -1,5 +1,100 @@
+import groovy.json.JsonSlurper
+import java.util.Base64
+
 plugins {
     id("fabric-loom")
+}
+
+// Task to extract shulker trim PNGs from BlockBench model file
+abstract class ExtractShulkerTrims : DefaultTask() {
+    @get:InputFile
+    abstract val bbmodelFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    private val trimPatterns = listOf(
+        "sentry", "vex", "wild", "coast", "dune", "wayfinder",
+        "raiser", "shaper", "host", "ward", "silence", "tide",
+        "snout", "rib", "eye", "spire", "flow", "bolt"
+    )
+
+    @TaskAction
+    fun extract() {
+        val bbmodel = bbmodelFile.get().asFile
+        if (!bbmodel.exists()) {
+            throw GradleException("BBModel file not found: ${bbmodel.absolutePath}")
+        }
+
+        val json = try {
+            @Suppress("UNCHECKED_CAST")
+            JsonSlurper().parse(bbmodel) as Map<String, Any>
+        } catch (e: Exception) {
+            throw GradleException("Failed to parse bbmodel: ${e.message}")
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val textures = json["textures"] as? List<Map<String, Any>>
+            ?: throw GradleException("No textures found in bbmodel")
+
+        if (textures.isEmpty()) {
+            throw GradleException("Textures array is empty in bbmodel")
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val layers = textures[0]["layers"] as? List<Map<String, Any>>
+            ?: throw GradleException("No layers found in bbmodel texture")
+
+        val layersByName = layers.associateBy { it["name"] as String }
+        val outDir = outputDir.get().asFile
+        outDir.mkdirs()
+
+        for (pattern in trimPatterns) {
+            val layer = layersByName[pattern]
+                ?: throw GradleException("Layer '$pattern' not found in bbmodel")
+
+            val dataUrl = layer["data_url"] as? String
+                ?: throw GradleException("No data_url for layer '$pattern'")
+
+            val base64Data = dataUrl.substringAfter("base64,")
+            val pngBytes = try {
+                Base64.getDecoder().decode(base64Data)
+            } catch (e: Exception) {
+                throw GradleException("Failed to decode PNG data for layer '$pattern': ${e.message}")
+            }
+
+            val outFile = File(outDir, "$pattern.png")
+            outFile.writeBytes(pngBytes)
+            logger.info("Extracted $pattern.png")
+        }
+
+        logger.lifecycle("Extracted ${trimPatterns.size} shulker trim textures")
+    }
+}
+
+// Register and configure the extraction task
+val generatedResources = layout.buildDirectory.dir("generated/resources/shulker-trims")
+
+val extractShulkerTrims by tasks.registering(ExtractShulkerTrims::class) {
+    bbmodelFile.set(rootProject.file("art/shulker-trims.bbmodel"))
+    outputDir.set(generatedResources.map { it.dir("assets/shulker_trims/textures/trims/entity/shulker") })
+}
+
+// Add generated resources to source sets
+sourceSets.main {
+    resources.srcDir(generatedResources)
+}
+
+// Ensure extraction runs before resource processing
+tasks.processResources {
+    dependsOn(extractShulkerTrims)
+    // Exclude reference textures (design aids, not for distribution)
+    exclude("**/reference_*")
+}
+
+// Also ensure sources jar depends on extraction
+tasks.named("sourcesJar") {
+    dependsOn(extractShulkerTrims)
 }
 
 base {
