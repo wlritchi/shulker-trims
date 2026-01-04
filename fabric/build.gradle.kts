@@ -1,5 +1,8 @@
 import groovy.json.JsonSlurper
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
 import java.util.Base64
+import javax.imageio.ImageIO
 
 plugins {
     id("fabric-loom")
@@ -63,9 +66,28 @@ abstract class ExtractShulkerTrims : DefaultTask() {
                 throw GradleException("Failed to decode PNG data for layer '$pattern': ${e.message}")
             }
 
+            // Read the image and pad to 64x64 if needed
+            val sourceImage = try {
+                ImageIO.read(ByteArrayInputStream(pngBytes))
+            } catch (e: Exception) {
+                throw GradleException("Failed to read PNG for layer '$pattern': ${e.message}")
+            }
+
+            val outputImage = if (sourceImage.width == 64 && sourceImage.height == 64) {
+                sourceImage
+            } else {
+                // Create 64x64 canvas with transparency and draw source at origin
+                val padded = BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB)
+                padded.createGraphics().apply {
+                    drawImage(sourceImage, 0, 0, null)
+                    dispose()
+                }
+                padded
+            }
+
             val outFile = File(outDir, "$pattern.png")
-            outFile.writeBytes(pngBytes)
-            logger.info("Extracted $pattern.png")
+            ImageIO.write(outputImage, "PNG", outFile)
+            logger.info("Extracted $pattern.png (${sourceImage.width}x${sourceImage.height} -> 64x64)")
         }
 
         logger.lifecycle("Extracted ${trimPatterns.size} shulker trim textures")
