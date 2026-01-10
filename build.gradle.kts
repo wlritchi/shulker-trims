@@ -1,6 +1,67 @@
 import java.util.jar.Attributes
 import java.util.jar.Manifest
 
+/**
+ * Computes project version from git tags.
+ *
+ * Version format:
+ * - On tag `v1.0.0` or `1.0.0`: `1.0.0`
+ * - 5 commits after tag: `1.0.0+5.g1234abc`
+ * - Dirty working tree: appends `-dirty`
+ * - No tags: `0.0.0+g1234abc-SNAPSHOT`
+ * - No git: `unknown`
+ */
+fun computeGitVersion(): String {
+    return try {
+        val process = ProcessBuilder("git", "describe", "--tags", "--dirty", "--always")
+            .directory(projectDir)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText().trim()
+        val exitCode = process.waitFor()
+
+        if (exitCode != 0 || output.isEmpty()) {
+            return "unknown"
+        }
+
+        // Parse git describe output
+        // Possible formats:
+        // - v1.0.0 (exact tag)
+        // - 1.0.0-rc1 (exact tag without v prefix)
+        // - v1.0.0-dirty (exact tag, dirty)
+        // - v1.0.0-5-g1234abc (after tag)
+        // - v1.0.0-5-g1234abc-dirty (after tag, dirty)
+        // - 1234abc (no tags, just commit hash)
+        // - 1234abc-dirty (no tags, dirty)
+
+        val dirty = output.endsWith("-dirty")
+        val cleanOutput = if (dirty) output.removeSuffix("-dirty") else output
+
+        // Check if it's just a commit hash (no tags)
+        if (cleanOutput.matches(Regex("^[0-9a-f]{7,40}$"))) {
+            val version = "0.0.0+g$cleanOutput-SNAPSHOT"
+            return if (dirty) "$version-dirty" else version
+        }
+
+        // Pattern for tag with commits after: v1.0.0-5-g1234abc or 1.0.0-5-g1234abc
+        val afterTagPattern = Regex("^v?(.+)-([0-9]+)-g([0-9a-f]+)$")
+        val afterTagMatch = afterTagPattern.matchEntire(cleanOutput)
+        if (afterTagMatch != null) {
+            val (tag, commits, hash) = afterTagMatch.destructured
+            val version = "$tag+$commits.g$hash"
+            return if (dirty) "$version-dirty" else version
+        }
+
+        // Exact tag match: v1.0.0 or 1.0.0-rc1
+        val version = cleanOutput.removePrefix("v")
+        return if (dirty) "$version-dirty" else version
+    } catch (e: Exception) {
+        "unknown"
+    }
+}
+
+val gitVersion = computeGitVersion()
+
 buildscript {
     configurations.classpath {
         resolutionStrategy.activateDependencyLocking()
@@ -15,7 +76,7 @@ plugins {
 }
 
 group = property("maven_group")!!
-version = property("mod_version")!!
+version = gitVersion
 
 base {
     archivesName.set(property("archives_base_name").toString())
@@ -24,10 +85,10 @@ base {
 forgix {
     archiveClassifier = "mc${property("minecraft_version")}"
     merge("fabric") {
-        inputJar.set(layout.projectDirectory.file("fabric/build/libs/${property("archives_base_name")}-fabric-${property("mod_version")}.jar"))
+        inputJar.set(layout.projectDirectory.file("fabric/build/libs/${property("archives_base_name")}-fabric-${gitVersion}.jar"))
     }
     merge("bukkit") {
-        inputJar.set(layout.projectDirectory.file("bukkit/build/libs/${property("archives_base_name")}-bukkit-${property("mod_version")}.jar"))
+        inputJar.set(layout.projectDirectory.file("bukkit/build/libs/${property("archives_base_name")}-bukkit-${gitVersion}.jar"))
     }
 }
 
@@ -104,7 +165,7 @@ subprojects {
     apply(plugin = "java")
 
     group = property("maven_group")!!
-    version = property("mod_version")!!
+    version = rootProject.version
 
     dependencyLocking {
         lockAllConfigurations()
