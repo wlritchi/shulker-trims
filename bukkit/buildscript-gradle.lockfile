@@ -1,0 +1,6 @@
+# This is a Gradle generated file for dependency locking.
+# Manual edits can break the build and are not advised.
+# This file is expected to be part of source control.
+io.papermc.paperweight.userdev:io.papermc.paperweight.userdev.gradle.plugin:2.0.0-beta.19=classpath
+io.papermc.paperweight:paperweight-userdev:2.0.0-beta.19=classpath
+empty=

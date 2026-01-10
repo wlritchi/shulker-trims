@@ -4,6 +4,12 @@ import java.io.ByteArrayInputStream
 import java.util.Base64
 import javax.imageio.ImageIO
 
+buildscript {
+    configurations.classpath {
+        resolutionStrategy.activateDependencyLocking()
+    }
+}
+
 plugins {
     id("fabric-loom")
 }

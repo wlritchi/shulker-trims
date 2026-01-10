@@ -1,6 +1,12 @@
 import java.util.jar.Attributes
 import java.util.jar.Manifest
 
+buildscript {
+    configurations.classpath {
+        resolutionStrategy.activateDependencyLocking()
+    }
+}
+
 plugins {
     java
     id("fabric-loom") version "1.15.0-alpha.16" apply false
@@ -90,11 +96,19 @@ tasks.register("slowTest") {
     dependsOn(":fabric:runGameTest")
 }
 
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 subprojects {
     apply(plugin = "java")
 
     group = property("maven_group")!!
     version = property("mod_version")!!
+
+    dependencyLocking {
+        lockAllConfigurations()
+    }
 
     java {
         sourceCompatibility = JavaVersion.VERSION_21
