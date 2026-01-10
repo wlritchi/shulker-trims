@@ -150,18 +150,9 @@ fabricApi {
     }
 }
 
-// Production client game test task for CI (with XVFB support)
-dependencies {
-    "productionRuntimeMods"("net.fabricmc.fabric-api:fabric-api:${property("fabric_version")}")
-}
-
-tasks.register("runProductionClientGameTest", net.fabricmc.loom.task.prod.ClientProductionRunTask::class) {
-    jvmArgs.add("-Dfabric.client.gametest")
-    // Disable network synchronizer to avoid CI issues
-    jvmArgs.add("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
-    // Use XVFB on Linux CI environments
-    useXVFB.set(System.getenv("CI") != null && System.getProperty("os.name").lowercase().contains("linux"))
-}
+// Note: For headless client game tests on Linux, use:
+//   xvfb-run -a ./gradlew :fabric:runClientGameTest
+// This ensures consistent rendering between local and CI environments.
 
 repositories {
     maven("https://maven.fabricmc.net/")

@@ -5,7 +5,7 @@
 #
 # To generate/update templates:
 # 1. Delete the template file(s) you want to regenerate
-# 2. Run: ./gradlew :fabric:runClientGameTest
+# 2. Run: xvfb-run -a ./gradlew :fabric:runClientGameTest
 # 3. The new templates will be saved here automatically
 # 4. Review the generated images and commit them
 #

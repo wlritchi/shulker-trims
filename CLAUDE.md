@@ -81,11 +81,16 @@ Server-side game tests verify trim data storage and manipulation:
 
 Client-side game tests verify trim rendering on shulker boxes:
 - Located in `fabric/src/gametest/java/` (class: `ShulkerTrimsClientGameTest`)
-- Tests create singleplayer worlds, place trimmed shulkers, and take screenshots
-- Run with `./gradlew :fabric:runClientGameTest` (requires display)
-- Run with `./gradlew :fabric:runProductionClientGameTest` (uses XVFB in CI)
+- Tests create singleplayer worlds, place trimmed shulkers, and compare screenshots against golden templates
+- Run with `xvfb-run -a ./gradlew :fabric:runClientGameTest` (uses XVFB for consistent headless rendering)
 
-Screenshots are saved to `fabric/build/run/clientGameTest/screenshots/`
+**Screenshot locations:**
+- Golden templates (checked in): `fabric/src/gametest/resources/templates/*.png`
+
+**Golden image workflow:**
+- To regenerate templates: delete template file(s), run tests, review and commit new templates
+- If a template doesn't exist, the test saves the screenshot as the new template
+- If a template exists, the test compares against it (1% MSD tolerance)
 
 ### Manual Testing
 
