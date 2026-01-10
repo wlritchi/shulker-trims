@@ -65,7 +65,7 @@ jobs:
         with:
           mc: 1.21.10
           modloader: fabric
-          regex: .*shulker-trims.*
+          regex: .*fabric.*
           mc-runtime-test: fabric
           java: ${{ env.java_version }}
           cache-mc: github
