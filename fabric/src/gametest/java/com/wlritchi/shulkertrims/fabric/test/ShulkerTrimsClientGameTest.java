@@ -137,12 +137,10 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
 
     /**
      * Mean Squared Difference threshold for screenshot comparison.
-     * 0.01 (1%) provides tolerance for minor GPU/driver rendering differences
-     * while still catching significant visual regressions.
-     * Default Fabric threshold is 0.005 (0.5%), but CI environments with
-     * XVFB may have slightly more variation.
+     * 0.0001 (0.01%) is strict enough to catch single-texture changes
+     * while allowing for negligible floating-point rendering differences.
      */
-    private static final float COMPARISON_THRESHOLD = 0.01f;
+    private static final float COMPARISON_THRESHOLD = 0.0001f;
 
     @Override
     public void runTest(ClientGameTestContext context) {
