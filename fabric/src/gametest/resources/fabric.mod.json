@@ -5,7 +5,7 @@
   "name": "Shulker Trims Tests",
   "description": "GameTest tests for Shulker Trims mod",
   "authors": ["wlritchi"],
-  "license": "MIT",
+  "license": "CC0-1.0",
   "environment": "*",
   "entrypoints": {
     "fabric-gametest": [

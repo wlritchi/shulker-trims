@@ -6,7 +6,7 @@
   "description": "Apply armor trims to shulker boxes using the smithing table",
   "authors": ["wlritchi"],
   "contact": {},
-  "license": "MIT",
+  "license": "CC0-1.0",
   "icon": "assets/shulker_trims/icon.png",
   "environment": "*",
   "entrypoints": {
