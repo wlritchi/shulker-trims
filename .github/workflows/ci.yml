@@ -69,7 +69,7 @@ jobs:
           mc-runtime-test: fabric
           java: ${{ env.java_version }}
           cache-mc: github
-          fabric-api: latest
+          fabric-api: 0.138.4+1.21.10
 
   paper-runtime-test:
     runs-on: ubuntu-latest
