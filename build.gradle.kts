@@ -4,16 +4,23 @@ import java.util.jar.Manifest
 /**
  * Computes project version from git tags.
  *
+ * Only considers tags that look like versions (starting with a digit or 'v' followed by digit).
+ * Non-version tags like 'foobar' are ignored.
+ *
  * Version format:
  * - On tag `v1.0.0` or `1.0.0`: `1.0.0`
  * - 5 commits after tag: `1.0.0+5.g1234abc`
  * - Dirty working tree: appends `-dirty`
- * - No tags: `0.0.0+g1234abc-SNAPSHOT`
+ * - No version tags: `0.0.0+g1234abc-SNAPSHOT`
  * - No git: `unknown`
  */
 fun computeGitVersion(): String {
     return try {
-        val process = ProcessBuilder("git", "describe", "--tags", "--dirty", "--always")
+        val process = ProcessBuilder(
+            "git", "describe", "--tags", "--dirty", "--always",
+            "--match", "[0-9]*",   // Match tags like 1.0.0
+            "--match", "v[0-9]*"   // Match tags like v1.0.0
+        )
             .directory(projectDir)
             .redirectErrorStream(true)
             .start()
