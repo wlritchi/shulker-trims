@@ -13,6 +13,10 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,6 +37,11 @@ jobs:
 
       - name: Run slow tests (game tests)
         run: ./gradlew slowTest
+
+      - name: Attest universal JAR
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: build/forgix/shulker-trims-*.jar
 
       - name: Upload Universal JAR
         uses: actions/upload-artifact@v4
