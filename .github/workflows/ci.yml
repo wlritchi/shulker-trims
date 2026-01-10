@@ -34,20 +34,6 @@ jobs:
       - name: Run slow tests (game tests)
         run: ./gradlew slowTest
 
-      - name: Upload Fabric JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: fabric-mod
-          path: fabric/build/libs/shulker-trims-mc1.21.10-fabric-*.jar
-          if-no-files-found: error
-
-      - name: Upload Bukkit JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: bukkit-plugin
-          path: bukkit/build/libs/shulker-trims-mc1.21.10-bukkit-*.jar
-          if-no-files-found: error
-
       - name: Upload Universal JAR
         uses: actions/upload-artifact@v4
         with:
@@ -68,10 +54,10 @@ jobs:
           java-version: ${{ env.java_version }}
           distribution: temurin
 
-      - name: Download Fabric mod artifact
+      - name: Download universal JAR
         uses: actions/download-artifact@v4
         with:
-          name: fabric-mod
+          name: universal-jar
           path: run/mods
 
       - name: Run Minecraft runtime test
@@ -79,10 +65,11 @@ jobs:
         with:
           mc: 1.21.10
           modloader: fabric
-          regex: .*fabric.*
+          regex: .*shulker-trims.*
           mc-runtime-test: fabric
           java: ${{ env.java_version }}
           cache-mc: github
+          fabric-api: latest
 
   paper-runtime-test:
     runs-on: ubuntu-latest
@@ -97,10 +84,10 @@ jobs:
           java-version: ${{ env.java_version }}
           distribution: temurin
 
-      - name: Download Bukkit plugin artifact
+      - name: Download universal JAR
         uses: actions/download-artifact@v4
         with:
-          name: bukkit-plugin
+          name: universal-jar
           path: plugin
 
       - name: Run Paper runtime test
