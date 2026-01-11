@@ -6,7 +6,6 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerCon
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerConnection;
 import net.fabricmc.fabric.api.client.gametest.v1.screenshot.TestScreenshotComparisonAlgorithm;
 import net.fabricmc.fabric.api.client.gametest.v1.screenshot.TestScreenshotComparisonOptions;
-import net.fabricmc.fabric.api.client.gametest.v1.screenshot.TestScreenshotOptions;
 import net.minecraft.client.gui.screen.DisconnectedScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.multiplayer.ConnectScreen;
@@ -397,14 +396,14 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             client.options.hudHidden = true;
         });
 
-        // Take 1080p screenshot for analysis
-        // Note: For trims to render correctly, the Paper plugin must sync trim data to the
-        // Fabric client via the shulker_trims:sync plugin messaging channel.
-        // If the shulker boxes appear without trims, the sync channel needs debugging.
-        TestScreenshotOptions options = TestScreenshotOptions.of("paper-server-shulker-grid")
-                .withSize(1920, 1080);
-        context.takeScreenshot(options);
-        LOGGER.info("Screenshot saved: paper-server-shulker-grid (1920x1080, manual inspection required)");
+        // Compare against the same golden template as the singleplayer test
+        // This verifies cross-platform rendering consistency
+        TestScreenshotComparisonOptions options = TestScreenshotComparisonOptions.of("shulker-trim-comprehensive-world")
+                .withAlgorithm(TestScreenshotComparisonAlgorithm.meanSquaredDifference(0.0001f))
+                .withSize(1920, 1080)
+                .save();
+        context.assertScreenshotEquals(options);
+        LOGGER.info("Screenshot comparison passed: shulker-trim-comprehensive-world (Paper server)");
 
         // Restore HUD
         context.runOnClient(client -> {
