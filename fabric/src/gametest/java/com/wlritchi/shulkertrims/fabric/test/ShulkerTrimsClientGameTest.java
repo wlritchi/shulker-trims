@@ -146,16 +146,109 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         LOGGER.info("Starting Shulker Trims client game tests");
 
-        // Test 1: Comprehensive world rendering - all patterns, colors, and materials
+        // Test 1: Untrimmed world baseline - creates golden template for comparison
+        testUntrimmedWorldRendering(context);
+
+        // Test 2: Comprehensive world rendering - all patterns, colors, and materials
         testComprehensiveWorldRendering(context);
 
-        // Test 2: Comprehensive inventory rendering - all patterns, colors, and materials
+        // Test 3: Comprehensive inventory rendering - all patterns, colors, and materials
         testComprehensiveInventoryRendering(context);
 
-        // Test 3: Smithing table GUI with trim preview
+        // Test 4: Smithing table GUI with trim preview
         testSmithingTablePreview(context);
 
         LOGGER.info("Shulker Trims client game tests completed successfully");
+    }
+
+    /**
+     * Baseline test with untrimmed shulker boxes in the same grid layout.
+     * This creates the golden template for comparing untrimmed shulkers,
+     * used in live modification tests to verify trim removal works.
+     */
+    private void testUntrimmedWorldRendering(ClientGameTestContext context) {
+        LOGGER.info("Test: Untrimmed world rendering - baseline without trims");
+
+        try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
+
+            singleplayer.getClientWorld().waitForChunksRender();
+
+            // Grid layout: 6 columns x 3 rows = 18 positions (same as trimmed test)
+            final int GRID_COLS = 6;
+            final int GRID_ROWS = 3;
+            final int SPACING = 3;
+            final int BASE_Y = 100;
+
+            final int gridMaxX = (GRID_COLS - 1) * SPACING;
+            final int gridMaxZ = (GRID_ROWS - 1) * SPACING;
+
+            singleplayer.getServer().runOnServer(server -> {
+                ServerWorld world = server.getOverworld();
+
+                // Place all 18 shulkers WITHOUT trims (same colors as trimmed test)
+                int shulkerIndex = 0;
+                for (int row = 0; row < GRID_ROWS; row++) {
+                    for (int col = 0; col < GRID_COLS; col++) {
+                        int x = col * SPACING;
+                        int z = row * SPACING;
+                        BlockPos pos = new BlockPos(x, BASE_Y, z);
+
+                        // Distribute colors: cycle through 17 colors (one will repeat for 18th)
+                        Block shulkerBlock = ALL_SHULKER_BLOCKS.get(shulkerIndex % ALL_SHULKER_BLOCKS.size());
+
+                        // Place the colored shulker block WITHOUT trim
+                        world.setBlockState(pos, shulkerBlock.getDefaultState());
+
+                        LOGGER.info("Grid[{},{}]: {} (no trim)",
+                                col, row, shulkerBlock.getName().getString());
+
+                        shulkerIndex++;
+                    }
+                }
+
+                // Place a barrier block for the player to stand on
+                int platformX = gridMaxX + 1;
+                int platformY = BASE_Y + 3;
+                int platformZ = gridMaxZ + 3;
+                BlockPos playerPlatform = new BlockPos(platformX, platformY, platformZ);
+                world.setBlockState(playerPlatform, Blocks.BARRIER.getDefaultState());
+            });
+
+            // Wait for updates and render
+            context.waitTicks(20);
+            singleplayer.getClientWorld().waitForChunksRender();
+
+            // Set time to noon for consistent lighting
+            singleplayer.getServer().runCommand("time set noon");
+            context.waitTicks(5);
+
+            // Position camera (same as trimmed test)
+            float yaw = 135;
+            float pitch = 35;
+            int cameraX = gridMaxX + 1;
+            int cameraY = BASE_Y + 4;
+            int cameraZ = gridMaxZ + 3;
+
+            singleplayer.getServer().runCommand(
+                    String.format("tp @p %d %d %d %.1f %.1f", cameraX, cameraY, cameraZ, yaw, pitch)
+            );
+            context.waitTicks(10);
+
+            // Hide HUD for clean screenshot
+            context.runOnClient(client -> {
+                client.options.hudHidden = true;
+            });
+            context.waitTicks(2);
+
+            // Compare screenshot against golden template
+            assertScreenshotMatchesTemplateHighRes(context, "shulker-untrimmed-world", 1920, 1080);
+            LOGGER.info("Screenshot comparison passed: shulker-untrimmed-world");
+
+            // Restore HUD
+            context.runOnClient(client -> {
+                client.options.hudHidden = false;
+            });
+        }
     }
 
     /**

@@ -16,6 +16,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
@@ -36,6 +39,15 @@ public class TrimSyncNetwork implements PluginMessageListener {
 
     private final Plugin plugin;
 
+    /**
+     * Tracks the last known trim state for each shulker box location.
+     * Used to detect changes when block entity data is modified externally (e.g., via commands).
+     * Key format: "world:x:y:z"
+     */
+    private final Map<String, ShulkerTrim> lastKnownTrims = new ConcurrentHashMap<>();
+
+    private int changeDetectionTaskId = -1;
+
     public TrimSyncNetwork(Plugin plugin) {
         this.plugin = plugin;
     }
@@ -44,11 +56,19 @@ public class TrimSyncNetwork implements PluginMessageListener {
         Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
         Bukkit.getMessenger().registerIncomingPluginChannel(plugin, CHANNEL, this);
         plugin.getLogger().info("Registered trim sync channel: " + CHANNEL);
+
+        // Start periodic change detection task (runs every second)
+        changeDetectionTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, this::checkForChanges, 20L, 20L);
     }
 
     public void unregister() {
         Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, CHANNEL);
         Bukkit.getMessenger().unregisterIncomingPluginChannel(plugin, CHANNEL);
+
+        if (changeDetectionTaskId != -1) {
+            Bukkit.getScheduler().cancelTask(changeDetectionTaskId);
+            changeDetectionTaskId = -1;
+        }
     }
 
     @Override
@@ -83,13 +103,17 @@ public class TrimSyncNetwork implements PluginMessageListener {
 
     /**
      * Sync all trimmed shulker boxes in a chunk to a player.
+     * Also updates the last known state tracking.
      */
     public void syncChunkToPlayer(Player player, Chunk chunk) {
         for (BlockState state : chunk.getTileEntities()) {
             if (state instanceof ShulkerBox shulkerBox) {
+                Location loc = state.getLocation();
                 ShulkerTrim trim = ShulkerTrimStorage.readTrimFromBlock(shulkerBox);
                 if (trim != null) {
-                    sendTrimSync(player, state.getLocation(), trim);
+                    sendTrimSync(player, loc, trim);
+                    // Track this as the last known state
+                    lastKnownTrims.put(getLocationKey(loc), trim);
                 }
             }
         }
@@ -102,6 +126,74 @@ public class TrimSyncNetwork implements PluginMessageListener {
         for (Chunk chunk : player.getWorld().getLoadedChunks()) {
             syncChunkToPlayer(player, chunk);
         }
+    }
+
+    /**
+     * Periodically check for changes to shulker box trim data.
+     * This handles external modifications (e.g., /data merge commands).
+     */
+    private void checkForChanges() {
+        // Check each world's loaded chunks
+        for (org.bukkit.World world : Bukkit.getWorlds()) {
+            for (Chunk chunk : world.getLoadedChunks()) {
+                checkChunkForChanges(chunk);
+            }
+        }
+    }
+
+    /**
+     * Check a chunk for shulker box trim changes and broadcast updates to nearby players.
+     */
+    private void checkChunkForChanges(Chunk chunk) {
+        for (BlockState state : chunk.getTileEntities()) {
+            if (state instanceof ShulkerBox shulkerBox) {
+                Location loc = state.getLocation();
+                String key = getLocationKey(loc);
+                ShulkerTrim currentTrim = ShulkerTrimStorage.readTrimFromBlock(shulkerBox);
+                ShulkerTrim lastTrim = lastKnownTrims.get(key);
+
+                // Check if trim has changed
+                if (!Objects.equals(currentTrim, lastTrim)) {
+                    // Trim changed - broadcast update to all nearby players
+                    if (currentTrim != null) {
+                        sendTrimSync(loc, currentTrim);
+                        lastKnownTrims.put(key, currentTrim);
+                    } else {
+                        // Trim removed - broadcast null trim packet
+                        sendTrimRemoval(loc);
+                        lastKnownTrims.remove(key);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Send a "trim removed" packet for a specific block.
+     */
+    public void sendTrimRemoval(Player player, Location location) {
+        byte[] data = createTrimPacket(location, null);
+        if (data != null) {
+            sendToPlayer(player, data);
+        }
+    }
+
+    /**
+     * Send a "trim removed" packet to all nearby players.
+     */
+    public void sendTrimRemoval(Location location) {
+        byte[] data = createTrimPacket(location, null);
+        if (data == null) return;
+
+        for (Player player : location.getWorld().getPlayers()) {
+            if (player.getLocation().distance(location) < 256) {
+                sendToPlayer(player, data);
+            }
+        }
+    }
+
+    private String getLocationKey(Location loc) {
+        return loc.getWorld().getName() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
     }
 
     private byte[] createTrimPacket(Location location, ShulkerTrim trim) {

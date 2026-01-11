@@ -46,13 +46,14 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
 
     // Test mode - change this to switch between test types
     private enum TestMode {
-        FABRIC_INPROCESS,   // Use Fabric's built-in dedicated server
-        PAPER_LAUNCHED,     // Launch Paper server automatically
-        PAPER_CHUNK_RELOAD, // Test chunk unload/reload sync on Paper
-        EXTERNAL_MANUAL     // Connect to manually-started server
+        FABRIC_INPROCESS,       // Use Fabric's built-in dedicated server
+        PAPER_LAUNCHED,         // Launch Paper server automatically
+        PAPER_CHUNK_RELOAD,     // Test chunk unload/reload sync on Paper
+        PAPER_LIVE_MODIFICATION,// Test live trim add/remove while player in range
+        EXTERNAL_MANUAL         // Connect to manually-started server
     }
 
-    private static final TestMode TEST_MODE = TestMode.PAPER_CHUNK_RELOAD;
+    private static final TestMode TEST_MODE = TestMode.PAPER_LIVE_MODIFICATION;
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -60,8 +61,214 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             case FABRIC_INPROCESS -> testFabricDedicatedServer(context);
             case PAPER_LAUNCHED -> testPaperServerLaunched(context);
             case PAPER_CHUNK_RELOAD -> testPaperChunkReloadSync(context);
+            case PAPER_LIVE_MODIFICATION -> testPaperLiveModification(context);
             case EXTERNAL_MANUAL -> testExternalServerConnection(context, MANUAL_SERVER_ADDRESS);
         }
+    }
+
+    /**
+     * Test that trim data syncs correctly when modified while player is in range.
+     *
+     * <p>This test verifies that the Paper plugin correctly syncs trim data when:
+     * 1. Trims are added via /data merge while player is watching
+     * 2. Trims are removed via /data remove while player is watching
+     *
+     * <p>This is the "live modification" test - changes happen in real-time.
+     */
+    private void testPaperLiveModification(ClientGameTestContext context) {
+        LOGGER.info("=== Test: Paper Server Live Trim Modification ===");
+
+        try (TestServerLauncher launcher = new TestServerLauncher(
+                TestServerLauncher.ServerType.PAPER, TEST_SERVER_PORT)) {
+
+            // Start the server
+            launcher.start(180);
+
+            // Set up UNTRIMMED world (no trims initially)
+            LOGGER.info("Setting up untrimmed world via RCON...");
+            setupUntrimmedWorldViaRcon(launcher);
+
+            // Connect to the server
+            String address = launcher.getAddress();
+            LOGGER.info("Connecting to Paper server at {}", address);
+
+            // Run the live modification test
+            testPaperLiveModificationConnection(context, address, launcher);
+
+        } catch (Exception e) {
+            LOGGER.error("Paper live modification test failed", e);
+            throw new AssertionError("Paper live modification test failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Set up the test world with untrimmed shulkers using RCON commands.
+     */
+    private void setupUntrimmedWorldViaRcon(TestServerLauncher launcher) {
+        try {
+            // Use basic setup (places shulkers WITHOUT trims)
+            for (String command : TestWorldSetup.generateBasicSetupCommands()) {
+                String response = launcher.sendCommand(command);
+                LOGGER.debug("RCON [{}]: {}", command, response);
+            }
+            LOGGER.info("Untrimmed world setup complete (18 shulker boxes placed, no trims)");
+        } catch (Exception e) {
+            LOGGER.warn("RCON world setup encountered errors: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Test Paper server connection with live trim add/remove.
+     */
+    private void testPaperLiveModificationConnection(ClientGameTestContext context, String serverAddress, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Server Live Modification ===");
+        LOGGER.info("Attempting to connect to: {}", serverAddress);
+
+        // Initiate connection
+        context.runOnClient(client -> {
+            ServerInfo serverInfo = new ServerInfo(
+                    "Test Paper Server",
+                    serverAddress,
+                    ServerInfo.ServerType.OTHER
+            );
+
+            ConnectScreen.connect(
+                    client.currentScreen,
+                    client,
+                    ServerAddress.parse(serverAddress),
+                    serverInfo,
+                    false,
+                    null
+            );
+        });
+
+        // Wait for world load
+        LOGGER.info("Waiting for world load...");
+        waitForWorldLoad(context);
+
+        // Verify we're connected
+        boolean isConnected = context.computeOnClient(client ->
+                client.world != null && client.player != null
+        );
+
+        if (!isConnected) {
+            throw new AssertionError("Failed to connect to Paper server");
+        }
+
+        LOGGER.info("Successfully connected to Paper server!");
+
+        // Wait for initial chunks to load
+        context.waitTicks(60);
+
+        // Get player name for teleport commands
+        String playerName = context.computeOnClient(client ->
+                client.player != null ? client.player.getGameProfile().name() : "Player0"
+        );
+
+        // Teleport to camera position
+        try {
+            String teleportCommand = TestWorldSetup.generateTeleportCommand(playerName);
+            launcher.sendCommand(teleportCommand);
+            launcher.sendCommand("gamemode creative " + playerName);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to teleport player: {}", e.getMessage());
+        }
+
+        // Wait for chunks to render at camera position
+        context.waitTicks(100);
+
+        // Hide HUD for clean screenshots
+        context.runOnClient(client -> {
+            client.options.hudHidden = true;
+        });
+
+        // === PHASE 1: Verify untrimmed state ===
+        LOGGER.info("Phase 1: Verifying untrimmed state");
+
+        TestScreenshotComparisonOptions untrimmedOptions = TestScreenshotComparisonOptions.of("shulker-untrimmed-world")
+                .withAlgorithm(TestScreenshotComparisonAlgorithm.meanSquaredDifference(COMPARISON_THRESHOLD))
+                .withSize(1920, 1080)
+                .save();
+
+        context.assertScreenshotEquals(untrimmedOptions);
+        LOGGER.info("Phase 1 PASSED: Untrimmed shulkers render correctly");
+
+        // === PHASE 2: Add trims via RCON ===
+        LOGGER.info("Phase 2: Adding trims via RCON while player is in range");
+
+        try {
+            for (TestWorldSetup.ShulkerPlacement placement : TestWorldSetup.getComprehensiveWorldPlacements()) {
+                String dataMergeCommand = String.format(
+                        "data merge block %d %d %d {components:{\"minecraft:custom_data\":{\"shulker_trims:trim\":{pattern:\"%s\",material:\"%s\"}}}}",
+                        placement.x(), placement.y(), placement.z(),
+                        placement.pattern(), placement.material());
+                launcher.sendCommand(dataMergeCommand);
+            }
+            LOGGER.info("Added trims to all 18 shulkers");
+        } catch (Exception e) {
+            LOGGER.warn("Failed to add trims: {}", e.getMessage());
+        }
+
+        // Wait for client to receive updates
+        context.waitTicks(40);
+
+        // Compare against trimmed template
+        TestScreenshotComparisonOptions trimmedOptions = TestScreenshotComparisonOptions.of("shulker-trim-comprehensive-world")
+                .withAlgorithm(TestScreenshotComparisonAlgorithm.meanSquaredDifference(COMPARISON_THRESHOLD))
+                .withSize(1920, 1080)
+                .save();
+
+        try {
+            context.assertScreenshotEquals(trimmedOptions);
+            LOGGER.info("Phase 2 PASSED: Trims appear after live addition!");
+        } catch (AssertionError e) {
+            LOGGER.error("Phase 2 FAILED: Trims do not appear after live addition");
+            throw new AssertionError("Live trim addition failed: trims not visible after /data merge. " +
+                    "The Paper plugin needs to detect block entity changes and sync.", e);
+        }
+
+        // === PHASE 3: Remove trims via RCON ===
+        LOGGER.info("Phase 3: Removing trims via RCON while player is in range");
+
+        try {
+            for (TestWorldSetup.ShulkerPlacement placement : TestWorldSetup.getComprehensiveWorldPlacements()) {
+                // Remove the trim from custom_data
+                String dataRemoveCommand = String.format(
+                        "data remove block %d %d %d components.\"minecraft:custom_data\".\"shulker_trims:trim\"",
+                        placement.x(), placement.y(), placement.z());
+                launcher.sendCommand(dataRemoveCommand);
+            }
+            LOGGER.info("Removed trims from all 18 shulkers");
+        } catch (Exception e) {
+            LOGGER.warn("Failed to remove trims: {}", e.getMessage());
+        }
+
+        // Wait for client to receive updates
+        context.waitTicks(40);
+
+        // Compare against untrimmed template
+        try {
+            context.assertScreenshotEquals(untrimmedOptions);
+            LOGGER.info("Phase 3 PASSED: Trims disappear after live removal!");
+        } catch (AssertionError e) {
+            LOGGER.error("Phase 3 FAILED: Trims still visible after live removal");
+            throw new AssertionError("Live trim removal failed: trims still visible after /data remove. " +
+                    "The Paper plugin needs to detect block entity changes and sync.", e);
+        }
+
+        // Restore HUD
+        context.runOnClient(client -> {
+            client.options.hudHidden = false;
+        });
+
+        // Disconnect from server
+        context.runOnClient(client -> {
+            LOGGER.info("Disconnecting from Paper server...");
+            client.disconnect(new TitleScreen(), false);
+        });
+
+        context.waitTicks(20);
+        LOGGER.info("Paper live modification test completed successfully");
     }
 
     /**
