@@ -193,4 +193,9 @@ afterEvaluate {
             dep.toString().contains("runGameTest")
         })
     }
+
+    // Disable network synchronization for client game tests to allow external server connections
+    tasks.named<JavaExec>("runClientGameTest") {
+        jvmArgs("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
+    }
 }
