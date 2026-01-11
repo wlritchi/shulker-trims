@@ -152,6 +152,9 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
         // Test 2: Comprehensive inventory rendering - all patterns, colors, and materials
         testComprehensiveInventoryRendering(context);
 
+        // Test 3: Smithing table GUI with trim preview
+        testSmithingTablePreview(context);
+
         LOGGER.info("Shulker Trims client game tests completed successfully");
     }
 
@@ -350,6 +353,128 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
             LOGGER.info("Screenshot comparison passed: shulker-trim-comprehensive-inventory");
 
             // Restore HUD and close chest
+            context.runOnClient(client -> {
+                client.options.hudHidden = false;
+                client.setScreen(null);
+            });
+            context.waitForScreen(null);
+        }
+    }
+
+    /**
+     * Test smithing table GUI with a shulker box trim preview.
+     * Places items in the smithing table slots and verifies the preview renders correctly.
+     */
+    private void testSmithingTablePreview(ClientGameTestContext context) {
+        LOGGER.info("Test: Smithing table trim preview rendering");
+
+        try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
+
+            singleplayer.getClientWorld().waitForChunksRender();
+
+            // Wait for recipe unlock toast to disappear
+            context.waitTicks(120);
+
+            BlockPos smithingTablePos = new BlockPos(0, 100, 0);
+
+            // Place a smithing table and a platform for the player to stand on
+            singleplayer.getServer().runOnServer(server -> {
+                ServerWorld world = server.getOverworld();
+                world.setBlockState(smithingTablePos, Blocks.SMITHING_TABLE.getDefaultState());
+                // Place barrier blocks as floor so the player doesn't fall
+                world.setBlockState(smithingTablePos.down(), Blocks.BARRIER.getDefaultState());
+                world.setBlockState(smithingTablePos.down().south(), Blocks.BARRIER.getDefaultState());
+            });
+
+            context.waitTicks(10);
+
+            // Give player items in hotbar slots via replace command
+            // Using blue shulker box + redstone for high contrast in the preview
+            singleplayer.getServer().runCommand("item replace entity @p hotbar.0 with wild_armor_trim_smithing_template 1");
+            singleplayer.getServer().runCommand("item replace entity @p hotbar.1 with blue_shulker_box 1");
+            singleplayer.getServer().runCommand("item replace entity @p hotbar.2 with redstone 1");
+            context.waitTicks(5);
+
+            // Teleport player near the smithing table (standing on the barrier block)
+            singleplayer.getServer().runCommand(
+                    String.format("tp @p %d %d %d", smithingTablePos.getX(), smithingTablePos.getY(), smithingTablePos.getZ() + 1)
+            );
+            context.waitTicks(5);
+
+            // Hide HUD for clean screenshot
+            context.runOnClient(client -> {
+                client.options.hudHidden = true;
+            });
+
+            // Open the smithing table by simulating right-click
+            context.runOnClient(client -> {
+                if (client.player != null && client.interactionManager != null) {
+                    client.interactionManager.interactBlock(
+                            client.player,
+                            net.minecraft.util.Hand.MAIN_HAND,
+                            new net.minecraft.util.hit.BlockHitResult(
+                                    smithingTablePos.toCenterPos(),
+                                    net.minecraft.util.math.Direction.UP,
+                                    smithingTablePos,
+                                    false
+                            )
+                    );
+                }
+            });
+
+            // Wait for smithing table screen to open
+            context.waitForScreen(net.minecraft.client.gui.screen.ingame.SmithingScreen.class);
+            context.waitTicks(5);
+
+            // Use clickSlot to shift-click items from hotbar into smithing table
+            // SmithingScreenHandler slot mapping: 0=template, 1=base, 2=addition, 3=result, 4-30=main inventory, 31-39=hotbar
+            context.runOnClient(client -> {
+                if (client.player != null && client.interactionManager != null &&
+                    client.player.currentScreenHandler instanceof net.minecraft.screen.SmithingScreenHandler handler) {
+                    // Shift-click template from hotbar slot 31
+                    client.interactionManager.clickSlot(handler.syncId, 31, 0, net.minecraft.screen.slot.SlotActionType.QUICK_MOVE, client.player);
+                }
+            });
+            context.waitTicks(3);
+
+            context.runOnClient(client -> {
+                if (client.player != null && client.interactionManager != null &&
+                    client.player.currentScreenHandler instanceof net.minecraft.screen.SmithingScreenHandler handler) {
+                    // Shift-click shulker box from hotbar slot 32
+                    client.interactionManager.clickSlot(handler.syncId, 32, 0, net.minecraft.screen.slot.SlotActionType.QUICK_MOVE, client.player);
+                }
+            });
+            context.waitTicks(3);
+
+            context.runOnClient(client -> {
+                if (client.player != null && client.interactionManager != null &&
+                    client.player.currentScreenHandler instanceof net.minecraft.screen.SmithingScreenHandler handler) {
+                    // Shift-click copper ingot from hotbar slot 33
+                    client.interactionManager.clickSlot(handler.syncId, 33, 0, net.minecraft.screen.slot.SlotActionType.QUICK_MOVE, client.player);
+                }
+            });
+            context.waitTicks(10);
+
+            // Log the current state
+            context.runOnClient(client -> {
+                if (client.currentScreen == null) {
+                    LOGGER.error("Smithing screen closed unexpectedly!");
+                } else {
+                    LOGGER.info("Screen still open: {}", client.currentScreen.getClass().getSimpleName());
+                    if (client.player.currentScreenHandler instanceof net.minecraft.screen.SmithingScreenHandler handler) {
+                        LOGGER.info("Slot 0 (template): {}", handler.getSlot(0).getStack());
+                        LOGGER.info("Slot 1 (base): {}", handler.getSlot(1).getStack());
+                        LOGGER.info("Slot 2 (addition): {}", handler.getSlot(2).getStack());
+                        LOGGER.info("Slot 3 (result): {}", handler.getSlot(3).getStack());
+                    }
+                }
+            });
+
+            // Compare screenshot against golden template
+            assertScreenshotMatchesTemplate(context, "shulker-trim-smithing-preview");
+            LOGGER.info("Screenshot comparison passed: shulker-trim-smithing-preview");
+
+            // Restore HUD and close smithing table
             context.runOnClient(client -> {
                 client.options.hudHidden = false;
                 client.setScreen(null);
