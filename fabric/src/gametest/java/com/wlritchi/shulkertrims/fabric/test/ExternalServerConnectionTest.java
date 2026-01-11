@@ -48,17 +48,56 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
     private enum TestMode {
         FABRIC_INPROCESS,   // Use Fabric's built-in dedicated server
         PAPER_LAUNCHED,     // Launch Paper server automatically
+        PAPER_CHUNK_RELOAD, // Test chunk unload/reload sync on Paper
         EXTERNAL_MANUAL     // Connect to manually-started server
     }
 
-    private static final TestMode TEST_MODE = TestMode.PAPER_LAUNCHED;
+    private static final TestMode TEST_MODE = TestMode.PAPER_CHUNK_RELOAD;
 
     @Override
     public void runTest(ClientGameTestContext context) {
         switch (TEST_MODE) {
             case FABRIC_INPROCESS -> testFabricDedicatedServer(context);
             case PAPER_LAUNCHED -> testPaperServerLaunched(context);
+            case PAPER_CHUNK_RELOAD -> testPaperChunkReloadSync(context);
             case EXTERNAL_MANUAL -> testExternalServerConnection(context, MANUAL_SERVER_ADDRESS);
+        }
+    }
+
+    /**
+     * Test that trim data syncs correctly when player leaves and re-enters chunk area.
+     *
+     * <p>This test verifies that the Paper plugin correctly syncs trim data when:
+     * 1. Player connects and receives initial trim sync (via PlayerRegisterChannelEvent)
+     * 2. Player moves away, causing chunks to unload
+     * 3. Player returns, causing chunks to reload
+     *
+     * <p>The expected behavior is that trims render correctly after chunk reload,
+     * but without proper chunk load sync handling, the trims won't be visible.
+     */
+    private void testPaperChunkReloadSync(ClientGameTestContext context) {
+        LOGGER.info("=== Test: Paper Server Chunk Reload Sync ===");
+
+        try (TestServerLauncher launcher = new TestServerLauncher(
+                TestServerLauncher.ServerType.PAPER, TEST_SERVER_PORT)) {
+
+            // Start the server
+            launcher.start(180);
+
+            // Set up the test world via RCON
+            LOGGER.info("Setting up test world via RCON...");
+            setupWorldViaRcon(launcher);
+
+            // Connect to the server
+            String address = launcher.getAddress();
+            LOGGER.info("Connecting to Paper server at {}", address);
+
+            // Run the chunk reload test
+            testPaperChunkReloadConnection(context, address, launcher);
+
+        } catch (Exception e) {
+            LOGGER.error("Paper chunk reload test failed", e);
+            throw new AssertionError("Paper chunk reload test failed: " + e.getMessage(), e);
         }
     }
 
@@ -418,6 +457,166 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
 
         context.waitTicks(20);
         LOGGER.info("Paper server test completed successfully");
+    }
+
+    /**
+     * Test Paper server connection with chunk unload/reload cycle.
+     *
+     * <p>This verifies that trim data is synced when player re-enters an area
+     * after chunks have been unloaded from the client.
+     */
+    private void testPaperChunkReloadConnection(ClientGameTestContext context, String serverAddress, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Server Chunk Reload Sync ===");
+        LOGGER.info("Attempting to connect to: {}", serverAddress);
+
+        // Initiate connection
+        context.runOnClient(client -> {
+            ServerInfo serverInfo = new ServerInfo(
+                    "Test Paper Server",
+                    serverAddress,
+                    ServerInfo.ServerType.OTHER
+            );
+
+            ConnectScreen.connect(
+                    client.currentScreen,
+                    client,
+                    ServerAddress.parse(serverAddress),
+                    serverInfo,
+                    false,
+                    null
+            );
+        });
+
+        // Wait for world load
+        LOGGER.info("Waiting for world load...");
+        waitForWorldLoad(context);
+
+        // Verify we're connected
+        boolean isConnected = context.computeOnClient(client ->
+                client.world != null && client.player != null
+        );
+
+        if (!isConnected) {
+            throw new AssertionError("Failed to connect to Paper server");
+        }
+
+        LOGGER.info("Successfully connected to Paper server!");
+
+        // Wait for initial chunks to load
+        context.waitTicks(60);
+
+        // Get player name for teleport commands
+        String playerName = context.computeOnClient(client ->
+                client.player != null ? client.player.getGameProfile().name() : "Player0"
+        );
+
+        // === PHASE 1: Initial teleport to camera position ===
+        LOGGER.info("Phase 1: Initial teleport to camera position");
+        try {
+            String teleportCommand = TestWorldSetup.generateTeleportCommand(playerName);
+            launcher.sendCommand(teleportCommand);
+            launcher.sendCommand("gamemode creative " + playerName);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to teleport player: {}", e.getMessage());
+        }
+
+        // Wait for chunks to render at camera position
+        context.waitTicks(100);
+
+        // Hide HUD for clean screenshots
+        context.runOnClient(client -> {
+            client.options.hudHidden = true;
+        });
+
+        // Verify initial screenshot matches (sanity check before chunk reload test)
+        LOGGER.info("Taking initial screenshot at camera position...");
+        context.takeScreenshot("chunk-reload-test-initial");
+
+        // === PHASE 2: Teleport far away to force chunk unload ===
+        // Simulation distance is 10 chunks = 160 blocks, so 500 blocks away should be safe
+        int farX = TestWorldSetup.CAMERA_X + 500;
+        int farZ = TestWorldSetup.CAMERA_Z + 500;
+        LOGGER.info("Phase 2: Teleporting far away to ({}, {}, {}) to force chunk unload",
+                farX, TestWorldSetup.CAMERA_Y, farZ);
+
+        try {
+            String teleportFar = String.format("tp %s %d %d %d",
+                    playerName, farX, TestWorldSetup.CAMERA_Y, farZ);
+            launcher.sendCommand(teleportFar);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to teleport player far: {}", e.getMessage());
+        }
+
+        // Wait for client to receive teleport and unload old chunks
+        // Give enough time for chunks to fully unload from client memory
+        LOGGER.info("Waiting for chunks to unload...");
+        context.waitTicks(100); // 5 seconds
+
+        // Verify player is at far position
+        context.runOnClient(client -> {
+            if (client.player != null) {
+                LOGGER.info("Player position after far teleport: {}, {}, {}",
+                        client.player.getX(), client.player.getY(), client.player.getZ());
+            }
+        });
+
+        // === PHASE 3: Teleport back to camera position ===
+        LOGGER.info("Phase 3: Teleporting back to camera position");
+        try {
+            String teleportBack = TestWorldSetup.generateTeleportCommand(playerName);
+            launcher.sendCommand(teleportBack);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to teleport player back: {}", e.getMessage());
+        }
+
+        // Wait for chunks to reload at camera position
+        LOGGER.info("Waiting for chunks to reload...");
+        context.waitTicks(100); // 5 seconds
+
+        // Verify player is back at camera position
+        context.runOnClient(client -> {
+            if (client.player != null) {
+                LOGGER.info("Player position after return teleport: {}, {}, {} (expected: {}, {}, {})",
+                        client.player.getX(), client.player.getY(), client.player.getZ(),
+                        TestWorldSetup.CAMERA_X + 0.5, TestWorldSetup.CAMERA_Y, TestWorldSetup.CAMERA_Z + 0.5);
+            }
+        });
+
+        // === PHASE 4: Screenshot comparison ===
+        // This is the key test: after chunk reload, do trims still render?
+        LOGGER.info("Phase 4: Taking screenshot after chunk reload");
+
+        // Compare against the golden template
+        // This SHOULD FAIL if chunk reload sync is not implemented
+        TestScreenshotComparisonOptions options = TestScreenshotComparisonOptions.of("shulker-trim-comprehensive-world")
+                .withAlgorithm(TestScreenshotComparisonAlgorithm.meanSquaredDifference(COMPARISON_THRESHOLD))
+                .withSize(1920, 1080)
+                .save();
+
+        try {
+            context.assertScreenshotEquals(options);
+            LOGGER.info("Screenshot comparison PASSED after chunk reload!");
+        } catch (AssertionError e) {
+            LOGGER.error("Screenshot comparison FAILED after chunk reload - trims not visible!");
+            LOGGER.error("This indicates the Paper plugin is not syncing trim data on chunk reload");
+            // Re-throw to fail the test
+            throw new AssertionError("Chunk reload sync failed: trims not visible after returning to area. " +
+                    "The Paper plugin needs to implement PlayerChunkLoadEvent handling.", e);
+        }
+
+        // Restore HUD
+        context.runOnClient(client -> {
+            client.options.hudHidden = false;
+        });
+
+        // Disconnect from server
+        context.runOnClient(client -> {
+            LOGGER.info("Disconnecting from Paper server...");
+            client.disconnect(new TitleScreen(), false);
+        });
+
+        context.waitTicks(20);
+        LOGGER.info("Paper chunk reload sync test completed");
     }
 
     /**

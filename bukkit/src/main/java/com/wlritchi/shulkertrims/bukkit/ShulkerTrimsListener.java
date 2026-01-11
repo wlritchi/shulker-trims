@@ -17,6 +17,7 @@ import org.bukkit.event.inventory.PrepareSmithingEvent;
 import org.bukkit.event.player.PlayerRegisterChannelEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.ItemStack;
+import io.papermc.paper.event.packet.PlayerChunkLoadEvent;
 import org.bukkit.inventory.SmithingInventory;
 
 /**
@@ -241,5 +242,27 @@ public class ShulkerTrimsListener implements Listener {
                 }
             }
         }, 5L);
+    }
+
+    /**
+     * When a chunk is sent to a player, sync any trimmed shulkers in that chunk.
+     * This fires when the player enters/re-enters an area, even if the chunk
+     * was already loaded in server memory.
+     */
+    @EventHandler
+    public void onPlayerChunkLoad(PlayerChunkLoadEvent event) {
+        org.bukkit.entity.Player player = event.getPlayer();
+
+        // Only sync to players who have our channel registered
+        if (!player.getListeningPluginChannels().contains(TrimSyncNetwork.CHANNEL)) {
+            return;
+        }
+
+        Chunk chunk = event.getChunk();
+
+        // Run next tick to ensure block entities are available
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            network.syncChunkToPlayer(player, chunk);
+        }, 1L);
     }
 }
