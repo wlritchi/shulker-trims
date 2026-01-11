@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerCon
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerConnection;
 import net.fabricmc.fabric.api.client.gametest.v1.screenshot.TestScreenshotComparisonAlgorithm;
 import net.fabricmc.fabric.api.client.gametest.v1.screenshot.TestScreenshotComparisonOptions;
+import net.fabricmc.fabric.api.client.gametest.v1.screenshot.TestScreenshotOptions;
 import net.minecraft.client.gui.screen.DisconnectedScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.multiplayer.ConnectScreen;
@@ -380,14 +381,24 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             }
         });
 
-        // Take screenshot for analysis
+        // Hide HUD for clean screenshot (no hotbar, crosshair, hand, chat)
+        context.runOnClient(client -> {
+            client.options.hudHidden = true;
+        });
+
+        // Take 1080p screenshot for analysis
         // Note: For trims to render correctly, the Paper plugin must sync trim data to the
         // Fabric client via the shulker_trims:sync plugin messaging channel.
         // If the shulker boxes appear without trims, the sync channel needs debugging.
-        // For now, save the screenshot for manual inspection rather than comparing against
-        // the singleplayer golden template.
-        context.takeScreenshot("paper-server-shulker-grid");
-        LOGGER.info("Screenshot saved: paper-server-shulker-grid (manual inspection required)");
+        TestScreenshotOptions options = TestScreenshotOptions.of("paper-server-shulker-grid")
+                .withSize(1920, 1080);
+        context.takeScreenshot(options);
+        LOGGER.info("Screenshot saved: paper-server-shulker-grid (1920x1080, manual inspection required)");
+
+        // Restore HUD
+        context.runOnClient(client -> {
+            client.options.hudHidden = false;
+        });
 
         // Disconnect from server
         context.runOnClient(client -> {
