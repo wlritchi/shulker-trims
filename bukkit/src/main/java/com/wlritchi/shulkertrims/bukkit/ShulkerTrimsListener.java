@@ -226,6 +226,7 @@ public class ShulkerTrimsListener implements Listener {
 
     /**
      * When a chunk loads, sync any trimmed shulkers to nearby players.
+     * Note: This only fires when a chunk is first loaded into memory.
      */
     @EventHandler
     public void onChunkLoad(ChunkLoadEvent event) {

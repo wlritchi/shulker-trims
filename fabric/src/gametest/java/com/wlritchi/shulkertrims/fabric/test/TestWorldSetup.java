@@ -141,9 +141,10 @@ public final class TestWorldSetup {
                     placement.x(), placement.y(), placement.z(), placement.blockId()));
 
             // Apply trim using /data merge on the block entity
-            // The NBT path is: custom_data.shulker_trims.trim.{pattern, material}
+            // In MC 1.21+, block entity component data is stored under "components"
+            // The path is: components."minecraft:custom_data"."shulker_trims:trim"
             commands.add(String.format(
-                    "data merge block %d %d %d {custom_data:{shulker_trims:{trim:{pattern:\"%s\",material:\"%s\"}}}}",
+                    "data merge block %d %d %d {components:{\"minecraft:custom_data\":{\"shulker_trims:trim\":{pattern:\"%s\",material:\"%s\"}}}}",
                     placement.x(), placement.y(), placement.z(),
                     placement.pattern(), placement.material()));
         }

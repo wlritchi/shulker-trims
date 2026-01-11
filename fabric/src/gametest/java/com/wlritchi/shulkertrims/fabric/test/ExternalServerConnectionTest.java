@@ -72,8 +72,8 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
         try (TestServerLauncher launcher = new TestServerLauncher(
                 TestServerLauncher.ServerType.PAPER, TEST_SERVER_PORT)) {
 
-            // Start the server
-            launcher.start(120); // 2 minute timeout for Paper startup
+            // Start the server (3 minute timeout - Paper startup can be slow after download)
+            launcher.start(180);
 
             // Set up the test world via RCON before connecting
             LOGGER.info("Setting up test world via RCON...");
@@ -103,11 +103,12 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             LOGGER.info("Basic world setup complete (18 shulker boxes placed)");
 
             // Now try to apply trims via data merge
-            // Note: This may not work if Paper doesn't support custom_data on block entities
+            // In MC 1.21+, block entity component data is stored under "components"
+            // The path is: components."minecraft:custom_data"."shulker_trims:trim"
             int trimCount = 0;
             for (TestWorldSetup.ShulkerPlacement placement : TestWorldSetup.getComprehensiveWorldPlacements()) {
                 String dataMergeCommand = String.format(
-                        "data merge block %d %d %d {custom_data:{shulker_trims:{trim:{pattern:\"%s\",material:\"%s\"}}}}",
+                        "data merge block %d %d %d {components:{\"minecraft:custom_data\":{\"shulker_trims:trim\":{pattern:\"%s\",material:\"%s\"}}}}",
                         placement.x(), placement.y(), placement.z(),
                         placement.pattern(), placement.material());
                 try {
@@ -122,6 +123,16 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                 }
             }
             LOGGER.info("Applied {} trims via data merge", trimCount);
+
+            // Verify the NBT was actually set by reading back the custom_data specifically
+            String verifyCommand = "data get block 0 100 0 components.\"minecraft:custom_data\"";
+            try {
+                String nbtData = launcher.sendCommand(verifyCommand);
+                LOGGER.info("NBT custom_data at (0, 100, 0): {}", nbtData);
+                // Expected format: {"shulker_trims:trim": {material: "minecraft:quartz", pattern: "minecraft:sentry"}}
+            } catch (Exception e) {
+                LOGGER.warn("Failed to verify NBT: {}", e.getMessage());
+            }
 
         } catch (Exception e) {
             LOGGER.warn("RCON world setup encountered errors: {}", e.getMessage());

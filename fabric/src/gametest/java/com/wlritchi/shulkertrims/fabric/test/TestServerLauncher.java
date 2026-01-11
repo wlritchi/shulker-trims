@@ -74,7 +74,11 @@ public class TestServerLauncher implements AutoCloseable {
         }
 
         if (!serverReady) {
-            throw new TimeoutException("Server did not start within " + timeoutSeconds + " seconds");
+            // Include server log in error message for debugging
+            String lastLog = serverLog.length() > 2000
+                ? serverLog.substring(serverLog.length() - 2000)
+                : serverLog.toString();
+            throw new TimeoutException("Server did not start within " + timeoutSeconds + " seconds. Last log output:\n" + lastLog);
         }
 
         // Wait for game port to actually be listening (server "Done" appears before port is bound)
@@ -172,15 +176,13 @@ public class TestServerLauncher implements AutoCloseable {
         // Accept EULA
         Files.writeString(serverDir.resolve("eula.txt"), "eula=true\n");
 
-        // Create plugins directory and copy plugin
+        // Create plugins directory and copy plugin (throws if not found)
         Path pluginsDir = serverDir.resolve("plugins");
         Files.createDirectories(pluginsDir);
 
         Path pluginJar = findBukkitPluginJar();
-        if (pluginJar != null) {
-            Files.copy(pluginJar, pluginsDir.resolve(pluginJar.getFileName()));
-            LOGGER.info("Copied plugin JAR: {}", pluginJar.getFileName());
-        }
+        Files.copy(pluginJar, pluginsDir.resolve(pluginJar.getFileName()));
+        LOGGER.info("Copied plugin JAR: {}", pluginJar.getFileName());
 
         // Rename paper jar for simpler command
         Files.move(paperJar, serverDir.resolve("paper.jar"));
@@ -301,20 +303,38 @@ public class TestServerLauncher implements AutoCloseable {
     }
 
     private Path findBukkitPluginJar() {
-        // Look for the built bukkit plugin JAR
-        Path bukkitBuild = Path.of("bukkit/build/libs");
-        if (Files.exists(bukkitBuild)) {
-            try (var stream = Files.list(bukkitBuild)) {
-                return stream
-                        .filter(p -> p.getFileName().toString().endsWith(".jar"))
-                        .filter(p -> !p.getFileName().toString().contains("sources"))
-                        .findFirst()
-                        .orElse(null);
-            } catch (IOException e) {
-                LOGGER.warn("Failed to find bukkit plugin JAR", e);
-            }
+        // The game test runs from fabric/build/run/clientGameTest, so go up 4 levels to project root
+        Path bukkitBuild = Path.of("../../../../bukkit/build/libs");
+
+        if (!Files.exists(bukkitBuild)) {
+            throw new RuntimeException("Bukkit plugin build directory not found: " + bukkitBuild.toAbsolutePath() +
+                    ". Run './gradlew :bukkit:build' first.");
         }
-        return null;
+
+        try (var stream = Files.list(bukkitBuild)) {
+            // Find the most recently modified JAR (excluding sources)
+            Path jar = stream
+                    .filter(p -> p.getFileName().toString().endsWith(".jar"))
+                    .filter(p -> !p.getFileName().toString().contains("sources"))
+                    .max((a, b) -> {
+                        try {
+                            return Files.getLastModifiedTime(a).compareTo(Files.getLastModifiedTime(b));
+                        } catch (IOException e) {
+                            return 0;
+                        }
+                    })
+                    .orElse(null);
+
+            if (jar == null) {
+                throw new RuntimeException("No plugin JAR found in " + bukkitBuild.toAbsolutePath() +
+                        ". Run './gradlew :bukkit:build' first.");
+            }
+
+            LOGGER.info("Using plugin JAR: {}", jar.getFileName());
+            return jar;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to list bukkit plugin directory", e);
+        }
     }
 
     private void startOutputReader(String readyMarker) {
