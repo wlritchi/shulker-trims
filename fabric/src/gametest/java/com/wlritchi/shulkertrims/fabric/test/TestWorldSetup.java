@@ -160,15 +160,42 @@ public final class TestWorldSetup {
     public static List<String> generateBasicSetupCommands() {
         var commands = new java.util.ArrayList<String>();
 
+        // Disable mob spawning completely
+        commands.add("gamerule doMobSpawning false");
+
         // Set time to noon for consistent lighting
         commands.add("time set noon");
 
         // Disable weather
         commands.add("weather clear 1000000");
 
-        // Place barrier platform for player
-        commands.add(String.format("setblock %d %d %d minecraft:barrier",
-                PLATFORM_X, PLATFORM_Y, PLATFORM_Z));
+        // Define test area bounds
+        int floorMinX = -2;
+        int floorMaxX = GRID_COLS * SPACING + 2;
+        int floorMinZ = -2;
+        int floorMaxZ = GRID_ROWS * SPACING + 2;
+
+        // Force-load chunks around the test area so they're available immediately
+        // Without this, the test area chunks might not be loaded when player teleports
+        int chunkMinX = floorMinX >> 4;  // Convert block coords to chunk coords
+        int chunkMaxX = floorMaxX >> 4;
+        int chunkMinZ = floorMinZ >> 4;
+        int chunkMaxZ = floorMaxZ >> 4;
+        commands.add(String.format("forceload add %d %d %d %d",
+                chunkMinX * 16, chunkMinZ * 16, chunkMaxX * 16, chunkMaxZ * 16));
+
+        // Set world spawn point near our test area so players spawn where chunks are loaded
+        // This is critical for the test - if player spawns far away, test area chunks won't load
+        commands.add(String.format("setworldspawn %d %d %d", CAMERA_X, CAMERA_Y, CAMERA_Z));
+
+        // Place barrier floor under the entire test area for safety
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                floorMinX, BASE_Y - 1, floorMinZ, floorMaxX, BASE_Y - 1, floorMaxZ));
+
+        // Place barrier platform for player at camera position (3x3 area for stability)
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                PLATFORM_X - 1, PLATFORM_Y, PLATFORM_Z - 1,
+                PLATFORM_X + 1, PLATFORM_Y, PLATFORM_Z + 1));
 
         // Place shulker boxes without trims (just to verify world setup works)
         for (ShulkerPlacement placement : getComprehensiveWorldPlacements()) {

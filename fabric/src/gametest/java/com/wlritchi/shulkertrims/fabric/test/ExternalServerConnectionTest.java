@@ -315,6 +315,14 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
 
         LOGGER.info("Successfully connected to Paper server!");
 
+        // Log initial spawn position
+        context.runOnClient(client -> {
+            if (client.player != null) {
+                LOGGER.info("Initial spawn position: {}, {}, {}",
+                        client.player.getX(), client.player.getY(), client.player.getZ());
+            }
+        });
+
         // Wait for initial chunks to load
         context.waitTicks(60);
 
@@ -326,28 +334,49 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
         // Teleport player to camera position using RCON
         try {
             String teleportCommand = TestWorldSetup.generateTeleportCommand(playerName);
+            LOGGER.info("Sending teleport command: {}", teleportCommand);
             String response = launcher.sendCommand(teleportCommand);
-            LOGGER.info("Teleported player: {}", response);
+            LOGGER.info("Teleport response: {}", response);
 
-            // Ensure player is in creative mode
+            // Ensure player is in creative mode and flying
             launcher.sendCommand("gamemode creative " + playerName);
         } catch (Exception e) {
             LOGGER.warn("Failed to teleport player via RCON: {}", e.getMessage());
         }
 
+        // Wait a bit for server to process teleport
+        context.waitTicks(20);
+
+        // Verify teleport worked by checking position
+        context.runOnClient(client -> {
+            if (client.player != null) {
+                LOGGER.info("Position after teleport: {}, {}, {} (expected: {}, {}, {})",
+                        client.player.getX(), client.player.getY(), client.player.getZ(),
+                        TestWorldSetup.CAMERA_X + 0.5, TestWorldSetup.CAMERA_Y, TestWorldSetup.CAMERA_Z + 0.5);
+            }
+        });
+
         // Wait for chunks to render at new position
         context.waitTicks(100);
 
-        // Log player position
+        // Log final player position and nearby blocks
         context.runOnClient(client -> {
             if (client.player != null) {
-                LOGGER.info("Player position after teleport: {}, {}, {} (yaw={}, pitch={})",
+                LOGGER.info("Final position before screenshot: {}, {}, {} (yaw={}, pitch={})",
                         client.player.getX(),
                         client.player.getY(),
                         client.player.getZ(),
                         client.player.getYaw(),
                         client.player.getPitch()
                 );
+
+                // Check if we can see any blocks at the expected shulker positions
+                if (client.world != null) {
+                    var pos = new net.minecraft.util.math.BlockPos(0, TestWorldSetup.BASE_Y, 0);
+                    var block = client.world.getBlockState(pos).getBlock();
+                    LOGGER.info("Block at ({}, {}, {}): {}", 0, TestWorldSetup.BASE_Y, 0,
+                            net.minecraft.registry.Registries.BLOCK.getId(block));
+                }
             }
         });
 

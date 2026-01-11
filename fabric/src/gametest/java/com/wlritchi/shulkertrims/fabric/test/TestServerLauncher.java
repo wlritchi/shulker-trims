@@ -191,15 +191,21 @@ public class TestServerLauncher implements AutoCloseable {
 
     private void writeServerProperties() throws IOException {
         int rconPort = port + RCON_PORT_OFFSET;
+        // Use a void-like flat world with a single barrier layer at y=0
+        // This prevents mobs from spawning and gives us a clean background
+        String generatorSettings = """
+                {"layers":[{"block":"minecraft:barrier","height":1}],"biome":"minecraft:the_void","features":false}""".trim();
+
         String properties = String.format("""
                 # Test server configuration
                 server-port=%d
                 online-mode=false
                 spawn-protection=0
                 max-players=2
-                view-distance=5
-                simulation-distance=5
+                view-distance=10
+                simulation-distance=10
                 level-type=minecraft:flat
+                generator-settings=%s
                 level-seed=1
                 generate-structures=false
                 spawn-monsters=false
@@ -211,7 +217,7 @@ public class TestServerLauncher implements AutoCloseable {
                 rcon.port=%d
                 rcon.password=%s
                 broadcast-rcon-to-ops=false
-                """, port, rconPort, RCON_PASSWORD);
+                """, port, generatorSettings, rconPort, RCON_PASSWORD);
 
         Files.writeString(serverDir.resolve("server.properties"), properties);
     }
