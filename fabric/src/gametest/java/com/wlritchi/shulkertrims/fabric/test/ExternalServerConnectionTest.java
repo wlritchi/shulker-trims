@@ -15,6 +15,10 @@ import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 
 /**
  * Cross-platform server connection tests.
@@ -22,11 +26,26 @@ import org.slf4j.LoggerFactory;
  * <p>These tests verify that the gametest client can connect to external servers
  * and take screenshots for golden image comparison.
  *
- * <p>Test modes:
+ * <p>Paper tests share a single server instance for efficiency (Paper startup is slow).
+ * Use the {@code shulker_trims.paper_tests} system property to control which tests run:
  * <ul>
- *   <li>FABRIC_INPROCESS: Use Fabric's built-in createServer() for in-process dedicated server</li>
- *   <li>PAPER_EXTERNAL: Launch a Paper server process and connect to it</li>
- *   <li>EXTERNAL_MANUAL: Connect to a manually-started server (for development)</li>
+ *   <li>Unset or empty: Run all Paper tests</li>
+ *   <li>Comma-separated list: Run only specified tests (e.g., "world,chest_gui")</li>
+ * </ul>
+ *
+ * <p>Available Paper test names:
+ * <ul>
+ *   <li>{@code world} - Basic world rendering with trimmed shulkers</li>
+ *   <li>{@code chunk_reload} - Chunk unload/reload sync verification</li>
+ *   <li>{@code live_modification} - Live trim add/remove while player watches</li>
+ *   <li>{@code chest_gui} - Chest GUI with trimmed shulker items</li>
+ *   <li>{@code smithing_table} - Smithing table trim preview</li>
+ * </ul>
+ *
+ * <p>Additional test modes (not part of Paper test suite):
+ * <ul>
+ *   <li>Set {@code shulker_trims.test_mode=fabric} for Fabric in-process server test</li>
+ *   <li>Set {@code shulker_trims.test_mode=manual} for manual external server connection</li>
  * </ul>
  */
 @SuppressWarnings("UnstableApiUsage")
@@ -44,65 +63,227 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
     // For manual testing with an already-running server
     private static final String MANUAL_SERVER_ADDRESS = "127.0.0.1:25565";
 
-    // Test mode - change this to switch between test types
-    private enum TestMode {
-        FABRIC_INPROCESS,       // Use Fabric's built-in dedicated server
-        PAPER_LAUNCHED,         // Launch Paper server automatically
-        PAPER_CHUNK_RELOAD,     // Test chunk unload/reload sync on Paper
-        PAPER_LIVE_MODIFICATION,// Test live trim add/remove while player in range
-        PAPER_CHEST_GUI,        // Test chest GUI with trimmed shulker items
-        PAPER_SMITHING_TABLE,   // Test smithing table trim preview
-        EXTERNAL_MANUAL         // Connect to manually-started server
-    }
+    // Paper test names
+    private static final String TEST_WORLD = "world";
+    private static final String TEST_CHUNK_RELOAD = "chunk_reload";
+    private static final String TEST_LIVE_MODIFICATION = "live_modification";
+    private static final String TEST_CHEST_GUI = "chest_gui";
+    private static final String TEST_SMITHING_TABLE = "smithing_table";
 
-    private static final TestMode TEST_MODE = TestMode.PAPER_LAUNCHED;
+    private static final Set<String> ALL_PAPER_TESTS = Set.of(
+            TEST_WORLD, TEST_CHUNK_RELOAD, TEST_LIVE_MODIFICATION, TEST_CHEST_GUI, TEST_SMITHING_TABLE
+    );
+
+    /**
+     * Get the set of Paper tests to run based on system property.
+     * If property is unset or empty, returns all tests.
+     * Otherwise, parses comma-separated list of test names.
+     */
+    private static Set<String> getEnabledPaperTests() {
+        String prop = System.getProperty("shulker_trims.paper_tests", "").trim();
+        if (prop.isEmpty()) {
+            return ALL_PAPER_TESTS;
+        }
+        Set<String> enabled = Arrays.stream(prop.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toSet());
+        // Validate test names
+        for (String test : enabled) {
+            if (!ALL_PAPER_TESTS.contains(test)) {
+                LOGGER.warn("Unknown Paper test name: '{}'. Valid names: {}", test, ALL_PAPER_TESTS);
+            }
+        }
+        return enabled;
+    }
 
     @Override
     public void runTest(ClientGameTestContext context) {
-        switch (TEST_MODE) {
-            case FABRIC_INPROCESS -> testFabricDedicatedServer(context);
-            case PAPER_LAUNCHED -> testPaperServerLaunched(context);
-            case PAPER_CHUNK_RELOAD -> testPaperChunkReloadSync(context);
-            case PAPER_LIVE_MODIFICATION -> testPaperLiveModification(context);
-            case PAPER_CHEST_GUI -> testPaperChestGui(context);
-            case PAPER_SMITHING_TABLE -> testPaperSmithingTable(context);
-            case EXTERNAL_MANUAL -> testExternalServerConnection(context, MANUAL_SERVER_ADDRESS);
+        String testMode = System.getProperty("shulker_trims.test_mode", "paper").trim().toLowerCase();
+
+        switch (testMode) {
+            case "fabric" -> testFabricDedicatedServer(context);
+            case "manual" -> testExternalServerConnection(context, MANUAL_SERVER_ADDRESS);
+            case "paper" -> runPaperTests(context);
+            default -> {
+                LOGGER.warn("Unknown test mode '{}', defaulting to 'paper'", testMode);
+                runPaperTests(context);
+            }
         }
     }
 
     /**
-     * Test that trim data syncs correctly when modified while player is in range.
-     *
-     * <p>This test verifies that the Paper plugin correctly syncs trim data when:
-     * 1. Trims are added via /data merge while player is watching
-     * 2. Trims are removed via /data remove while player is watching
-     *
-     * <p>This is the "live modification" test - changes happen in real-time.
+     * Run all enabled Paper tests with a shared server instance.
+     * This avoids the ~30s Paper startup overhead for each test.
      */
-    private void testPaperLiveModification(ClientGameTestContext context) {
-        LOGGER.info("=== Test: Paper Server Live Trim Modification ===");
+    private void runPaperTests(ClientGameTestContext context) {
+        Set<String> enabledTests = getEnabledPaperTests();
+        LOGGER.info("=== Paper Server Tests ===");
+        LOGGER.info("Enabled tests: {}", enabledTests);
+
+        if (enabledTests.isEmpty()) {
+            LOGGER.info("No Paper tests enabled, skipping");
+            return;
+        }
 
         try (TestServerLauncher launcher = new TestServerLauncher(
                 TestServerLauncher.ServerType.PAPER, TEST_SERVER_PORT)) {
 
-            // Start the server
+            // Start the server once (3 minute timeout - Paper startup can be slow)
             launcher.start(180);
-
-            // Set up UNTRIMMED world (no trims initially)
-            LOGGER.info("Setting up untrimmed world via RCON...");
-            setupUntrimmedWorldViaRcon(launcher);
-
-            // Connect to the server
             String address = launcher.getAddress();
-            LOGGER.info("Connecting to Paper server at {}", address);
+            LOGGER.info("Paper server started at {}", address);
 
-            // Run the live modification test
-            testPaperLiveModificationConnection(context, address, launcher);
+            // Run each enabled test
+            int passed = 0;
+            int failed = 0;
+
+            if (enabledTests.contains(TEST_WORLD)) {
+                cleanupWorldViaRcon(launcher);
+                try {
+                    runPaperWorldTest(context, address, launcher);
+                    passed++;
+                } catch (Exception | AssertionError e) {
+                    LOGGER.error("Paper world test FAILED", e);
+                    failed++;
+                }
+            }
+
+            if (enabledTests.contains(TEST_CHUNK_RELOAD)) {
+                cleanupWorldViaRcon(launcher);
+                try {
+                    runPaperChunkReloadTest(context, address, launcher);
+                    passed++;
+                } catch (Exception | AssertionError e) {
+                    LOGGER.error("Paper chunk reload test FAILED", e);
+                    failed++;
+                }
+            }
+
+            if (enabledTests.contains(TEST_LIVE_MODIFICATION)) {
+                cleanupWorldViaRcon(launcher);
+                try {
+                    runPaperLiveModificationTest(context, address, launcher);
+                    passed++;
+                } catch (Exception | AssertionError e) {
+                    LOGGER.error("Paper live modification test FAILED", e);
+                    failed++;
+                }
+            }
+
+            if (enabledTests.contains(TEST_CHEST_GUI)) {
+                cleanupWorldViaRcon(launcher);
+                try {
+                    runPaperChestGuiTest(context, address, launcher);
+                    passed++;
+                } catch (Exception | AssertionError e) {
+                    LOGGER.error("Paper chest GUI test FAILED", e);
+                    failed++;
+                }
+            }
+
+            if (enabledTests.contains(TEST_SMITHING_TABLE)) {
+                cleanupWorldViaRcon(launcher);
+                try {
+                    runPaperSmithingTableTest(context, address, launcher);
+                    passed++;
+                } catch (Exception | AssertionError e) {
+                    LOGGER.error("Paper smithing table test FAILED", e);
+                    failed++;
+                }
+            }
+
+            LOGGER.info("=== Paper Tests Complete: {} passed, {} failed ===", passed, failed);
+
+            if (failed > 0) {
+                throw new AssertionError(failed + " Paper test(s) failed");
+            }
 
         } catch (Exception e) {
-            LOGGER.error("Paper live modification test failed", e);
-            throw new AssertionError("Paper live modification test failed: " + e.getMessage(), e);
+            LOGGER.error("Paper server setup failed", e);
+            throw new AssertionError("Paper server setup failed: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Clean up the test world via RCON.
+     * Removes all blocks and resets to barrier floor.
+     */
+    private void cleanupWorldViaRcon(TestServerLauncher launcher) {
+        LOGGER.info("Cleaning up test world...");
+        try {
+            // Use @a to clear all players (in case player name changes between tests)
+            for (String command : TestWorldSetup.generateCleanupCommands("@a")) {
+                String response = launcher.sendCommand(command);
+                LOGGER.debug("RCON cleanup [{}]: {}", command, response);
+            }
+            LOGGER.info("World cleanup complete");
+        } catch (Exception e) {
+            LOGGER.warn("RCON world cleanup encountered errors: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Run the Paper world rendering test with a shared server.
+     */
+    private void runPaperWorldTest(ClientGameTestContext context, String address, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper World Rendering ===");
+
+        // Set up the test world via RCON
+        setupWorldViaRcon(launcher);
+
+        // Run the test
+        testPaperServerConnection(context, address, launcher);
+    }
+
+    /**
+     * Run the Paper chunk reload sync test with a shared server.
+     */
+    private void runPaperChunkReloadTest(ClientGameTestContext context, String address, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Chunk Reload Sync ===");
+
+        // Set up the test world via RCON
+        setupWorldViaRcon(launcher);
+
+        // Run the chunk reload test
+        testPaperChunkReloadConnection(context, address, launcher);
+    }
+
+    /**
+     * Run the Paper live modification test with a shared server.
+     */
+    private void runPaperLiveModificationTest(ClientGameTestContext context, String address, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Live Trim Modification ===");
+
+        // Set up UNTRIMMED world (no trims initially)
+        setupUntrimmedWorldViaRcon(launcher);
+
+        // Run the live modification test
+        testPaperLiveModificationConnection(context, address, launcher);
+    }
+
+    /**
+     * Run the Paper chest GUI test with a shared server.
+     */
+    private void runPaperChestGuiTest(ClientGameTestContext context, String address, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Chest GUI ===");
+
+        // Set up the chest with trimmed shulkers via RCON
+        setupChestViaRcon(launcher);
+
+        // Run the chest GUI test
+        testPaperChestGuiConnection(context, address, launcher);
+    }
+
+    /**
+     * Run the Paper smithing table test with a shared server.
+     */
+    private void runPaperSmithingTableTest(ClientGameTestContext context, String address, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Smithing Table ===");
+
+        // Note: Smithing table setup happens after connecting (needs player name)
+        // Run the smithing table test
+        testPaperSmithingTableConnection(context, address, launcher);
     }
 
     /**
@@ -273,38 +454,6 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
 
         context.waitTicks(20);
         LOGGER.info("Paper live modification test completed successfully");
-    }
-
-    /**
-     * Test chest GUI rendering with trimmed shulker items on Paper server.
-     *
-     * <p>This test verifies that trimmed shulker items render correctly in a chest GUI
-     * when connected to a Paper server. It compares against the singleplayer golden template.
-     */
-    private void testPaperChestGui(ClientGameTestContext context) {
-        LOGGER.info("=== Test: Paper Server Chest GUI ===");
-
-        try (TestServerLauncher launcher = new TestServerLauncher(
-                TestServerLauncher.ServerType.PAPER, TEST_SERVER_PORT)) {
-
-            // Start the server
-            launcher.start(180);
-
-            // Set up the chest with trimmed shulkers via RCON
-            LOGGER.info("Setting up chest with trimmed shulkers via RCON...");
-            setupChestViaRcon(launcher);
-
-            // Connect to the server
-            String address = launcher.getAddress();
-            LOGGER.info("Connecting to Paper server at {}", address);
-
-            // Run the chest GUI test
-            testPaperChestGuiConnection(context, address, launcher);
-
-        } catch (Exception e) {
-            LOGGER.error("Paper chest GUI test failed", e);
-            throw new AssertionError("Paper chest GUI test failed: " + e.getMessage(), e);
-        }
     }
 
     /**
@@ -490,34 +639,6 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
     }
 
     /**
-     * Test smithing table GUI rendering with trim preview on Paper server.
-     *
-     * <p>This test verifies that the smithing table trim preview renders correctly
-     * when connected to a Paper server. It compares against the singleplayer golden template.
-     */
-    private void testPaperSmithingTable(ClientGameTestContext context) {
-        LOGGER.info("=== Test: Paper Server Smithing Table ===");
-
-        try (TestServerLauncher launcher = new TestServerLauncher(
-                TestServerLauncher.ServerType.PAPER, TEST_SERVER_PORT)) {
-
-            // Start the server
-            launcher.start(180);
-
-            // Connect first to get player name, then set up
-            String address = launcher.getAddress();
-            LOGGER.info("Connecting to Paper server at {}", address);
-
-            // Run the smithing table test
-            testPaperSmithingTableConnection(context, address, launcher);
-
-        } catch (Exception e) {
-            LOGGER.error("Paper smithing table test failed", e);
-            throw new AssertionError("Paper smithing table test failed: " + e.getMessage(), e);
-        }
-    }
-
-    /**
      * Test Paper server connection with smithing table GUI screenshot.
      */
     private void testPaperSmithingTableConnection(ClientGameTestContext context, String serverAddress, TestServerLauncher launcher) {
@@ -685,70 +806,6 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
 
         context.waitTicks(20);
         LOGGER.info("Paper smithing table test completed successfully");
-    }
-
-    /**
-     * Test that trim data syncs correctly when player leaves and re-enters chunk area.
-     *
-     * <p>This test verifies that the Paper plugin correctly syncs trim data when:
-     * 1. Player connects and receives initial trim sync (via PlayerRegisterChannelEvent)
-     * 2. Player moves away, causing chunks to unload
-     * 3. Player returns, causing chunks to reload
-     *
-     * <p>The expected behavior is that trims render correctly after chunk reload,
-     * but without proper chunk load sync handling, the trims won't be visible.
-     */
-    private void testPaperChunkReloadSync(ClientGameTestContext context) {
-        LOGGER.info("=== Test: Paper Server Chunk Reload Sync ===");
-
-        try (TestServerLauncher launcher = new TestServerLauncher(
-                TestServerLauncher.ServerType.PAPER, TEST_SERVER_PORT)) {
-
-            // Start the server
-            launcher.start(180);
-
-            // Set up the test world via RCON
-            LOGGER.info("Setting up test world via RCON...");
-            setupWorldViaRcon(launcher);
-
-            // Connect to the server
-            String address = launcher.getAddress();
-            LOGGER.info("Connecting to Paper server at {}", address);
-
-            // Run the chunk reload test
-            testPaperChunkReloadConnection(context, address, launcher);
-
-        } catch (Exception e) {
-            LOGGER.error("Paper chunk reload test failed", e);
-            throw new AssertionError("Paper chunk reload test failed: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Test with Paper server launched automatically.
-     */
-    private void testPaperServerLaunched(ClientGameTestContext context) {
-        LOGGER.info("=== Test: Paper Server (Auto-Launched) ===");
-
-        try (TestServerLauncher launcher = new TestServerLauncher(
-                TestServerLauncher.ServerType.PAPER, TEST_SERVER_PORT)) {
-
-            // Start the server (3 minute timeout - Paper startup can be slow after download)
-            launcher.start(180);
-
-            // Set up the test world via RCON before connecting
-            LOGGER.info("Setting up test world via RCON...");
-            setupWorldViaRcon(launcher);
-
-            // Connect to the server
-            String address = launcher.getAddress();
-            LOGGER.info("Connecting to Paper server at {}", address);
-            testPaperServerConnection(context, address, launcher);
-
-        } catch (Exception e) {
-            LOGGER.error("Paper server test failed", e);
-            throw new AssertionError("Paper server test failed: " + e.getMessage(), e);
-        }
     }
 
     /**

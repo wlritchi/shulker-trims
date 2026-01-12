@@ -194,8 +194,19 @@ afterEvaluate {
         })
     }
 
-    // Disable network synchronization for client game tests to allow external server connections
+    // Configure client game tests
     tasks.named<JavaExec>("runClientGameTest") {
+        // Disable network synchronization to allow external server connections
         jvmArgs("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
+
+        // Pass through shulker_trims.* system properties to the Minecraft JVM
+        // This allows filtering which Paper tests to run, e.g.:
+        //   ./gradlew :fabric:runClientGameTest -Dshulker_trims.paper_tests=world,chest_gui
+        //   ./gradlew :fabric:runClientGameTest -Dshulker_trims.test_mode=fabric
+        System.getProperties().forEach { key, value ->
+            if (key.toString().startsWith("shulker_trims.")) {
+                jvmArgs("-D$key=$value")
+            }
+        }
     }
 }

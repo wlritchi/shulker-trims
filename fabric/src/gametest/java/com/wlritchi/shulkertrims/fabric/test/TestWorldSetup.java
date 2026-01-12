@@ -326,4 +326,46 @@ public final class TestWorldSetup {
                 generateTeleportCommand(playerSelector)
         );
     }
+
+    /**
+     * Generate commands to clean up/reset the test world.
+     * Removes all blocks in the test area, restoring it to air/barrier floor.
+     * Should be called between tests to ensure a clean state.
+     *
+     * @param playerSelector The player whose inventory should be cleared
+     * @return List of commands to execute in order
+     */
+    public static List<String> generateCleanupCommands(String playerSelector) {
+        var commands = new java.util.ArrayList<String>();
+
+        // Define test area bounds (covers both grid test area and GUI test area)
+        int minX = -2;
+        int maxX = GRID_COLS * SPACING + 2;
+        int minZ = -2;
+        int maxZ = GRID_ROWS * SPACING + 2;
+        int minY = BASE_Y - 1;
+        int maxY = BASE_Y + 5;
+
+        // Fill the entire test area with air (except floor)
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:air",
+                minX, BASE_Y, minZ, maxX, maxY, maxZ));
+
+        // Restore barrier floor
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                minX, BASE_Y - 1, minZ, maxX, BASE_Y - 1, maxZ));
+
+        // Restore player platform for camera position (3x3)
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                PLATFORM_X - 1, PLATFORM_Y, PLATFORM_Z - 1,
+                PLATFORM_X + 1, PLATFORM_Y, PLATFORM_Z + 1));
+
+        // Clear player inventory
+        commands.add("clear " + playerSelector);
+
+        // Reset player to safe position
+        commands.add(String.format("tp %s %d %d %d 0 0",
+                playerSelector, PLATFORM_X, PLATFORM_Y + 1, PLATFORM_Z));
+
+        return commands;
+    }
 }
