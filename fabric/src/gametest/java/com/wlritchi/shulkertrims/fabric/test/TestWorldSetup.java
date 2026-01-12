@@ -392,6 +392,86 @@ public final class TestWorldSetup {
                 DISPENSER_CAMERA_YAW, DISPENSER_CAMERA_PITCH);
     }
 
+    // Two-player placement test constants
+    // Tests that a shulker box placed by one player syncs trims to another player's client
+    public static final int TWO_PLAYER_BLOCK_X = 0;
+    public static final int TWO_PLAYER_BLOCK_Y = 100;
+    public static final int TWO_PLAYER_BLOCK_Z = 0;
+    // Position for the player who places the block (north of the placement spot)
+    public static final int TWO_PLAYER_PLACER_X = 0;
+    public static final int TWO_PLAYER_PLACER_Y = 100;
+    public static final int TWO_PLAYER_PLACER_Z = -2;
+    // Position for the observer player (south of the block, looking north)
+    public static final int TWO_PLAYER_OBSERVER_X = 0;
+    public static final int TWO_PLAYER_OBSERVER_Y = 102;
+    public static final int TWO_PLAYER_OBSERVER_Z = 3;
+    public static final float TWO_PLAYER_OBSERVER_YAW = 180.0f;  // Looking north
+    public static final float TWO_PLAYER_OBSERVER_PITCH = 30.0f;  // Looking down
+
+    /**
+     * Generate commands to set up the two-player placement test.
+     * Sets up floor, forceloads chunks, but does NOT give items to the bot.
+     * The bot's items should be given after it connects.
+     *
+     * @return List of commands to execute in order
+     */
+    public static List<String> generateTwoPlayerSetupCommands() {
+        var commands = new java.util.ArrayList<String>();
+
+        // Set time to noon and disable daylight cycle for consistent lighting
+        commands.add("gamerule doDaylightCycle false");
+        commands.add("time set noon");
+
+        // Force-load the chunk containing the test area
+        commands.add(String.format("forceload add %d %d", TWO_PLAYER_BLOCK_X, TWO_PLAYER_BLOCK_Z));
+
+        // Set world spawn near test area so chunks load
+        commands.add(String.format("setworldspawn %d %d %d",
+                TWO_PLAYER_BLOCK_X, TWO_PLAYER_BLOCK_Y, TWO_PLAYER_BLOCK_Z));
+
+        // Place barrier floor for placement area
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                TWO_PLAYER_BLOCK_X - 2, TWO_PLAYER_BLOCK_Y - 1, TWO_PLAYER_BLOCK_Z - 3,
+                TWO_PLAYER_BLOCK_X + 2, TWO_PLAYER_BLOCK_Y - 1, TWO_PLAYER_BLOCK_Z + 4));
+
+        // Place barrier platform for observer at camera position
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                TWO_PLAYER_OBSERVER_X - 1, TWO_PLAYER_OBSERVER_Y - 1, TWO_PLAYER_OBSERVER_Z - 1,
+                TWO_PLAYER_OBSERVER_X + 1, TWO_PLAYER_OBSERVER_Y - 1, TWO_PLAYER_OBSERVER_Z + 1));
+
+        return commands;
+    }
+
+    /**
+     * Generate command to give the placer bot a trimmed shulker box.
+     * Uses blue shulker box + wild pattern + redstone material for visibility.
+     *
+     * @param playerSelector The bot player to give the item to
+     * @return The command to give the item
+     */
+    public static String generateTwoPlayerGiveItemCommand(String playerSelector) {
+        return String.format(
+                "item replace entity %s hotbar.0 with blue_shulker_box[custom_data={\"shulker_trims:trim\":{pattern:\"minecraft:wild\",material:\"minecraft:redstone\"}}]",
+                playerSelector);
+    }
+
+    /**
+     * Generate teleport command for the observer in the two-player test.
+     */
+    public static String generateTwoPlayerObserverTeleportCommand(String playerSelector) {
+        return String.format("tp %s %d %d %d %.1f %.1f",
+                playerSelector, TWO_PLAYER_OBSERVER_X, TWO_PLAYER_OBSERVER_Y, TWO_PLAYER_OBSERVER_Z,
+                TWO_PLAYER_OBSERVER_YAW, TWO_PLAYER_OBSERVER_PITCH);
+    }
+
+    /**
+     * Generate teleport command for the placer bot in the two-player test.
+     */
+    public static String generateTwoPlayerPlacerTeleportCommand(String playerSelector) {
+        return String.format("tp %s %d %d %d 0 0",
+                playerSelector, TWO_PLAYER_PLACER_X, TWO_PLAYER_PLACER_Y, TWO_PLAYER_PLACER_Z);
+    }
+
     /**
      * Generate teleport command to chest/smithing table position for GUI tests.
      */

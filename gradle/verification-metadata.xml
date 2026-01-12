@@ -8,6 +8,21 @@
               They can't be verified against remote checksums. -->
          <trust group="remapped.net.fabricmc.fabric-api"/>
          <trust group="net.minecraft"/>
+         <!-- MCProtocolLib and its dependencies for gametest bot client -->
+         <trust group="org.geysermc.mcprotocollib"/>
+         <trust group="org.cloudburstmc"/>
+         <trust group="org.cloudburstmc.math"/>
+         <trust group="org.cloudburstmc.netty"/>
+         <trust group="net.raphimc"/>
+         <trust group="net.lenni0451.commons"/>
+         <trust group="com.nukkitx.fastutil"/>
+         <trust group="io.netty"/>
+         <trust group="io.jsonwebtoken"/>
+         <trust group="net.kyori"/>
+         <trust group="org.checkerframework"/>
+         <trust group="com.google.errorprone"/>
+         <trust group="com.google.code.gson"/>
+         <trust group="org.jspecify"/>
       </trusted-artifacts>
    </configuration>
    <components>

@@ -156,6 +156,12 @@ fabricApi {
 
 repositories {
     maven("https://maven.fabricmc.net/")
+    maven("https://repo.opencollab.dev/main/") {
+        name = "opencollab"
+    }
+    maven("https://repo.opencollab.dev/maven-snapshots/") {
+        name = "opencollab-snapshots"
+    }
 }
 
 dependencies {
@@ -165,6 +171,10 @@ dependencies {
     modImplementation("net.fabricmc.fabric-api:fabric-api:${property("fabric_version")}")
 
     implementation(project(":common"))
+
+    // MCProtocolLib for bot client in two-player tests
+    // Using 1.21.9-SNAPSHOT since no exact 1.21.10 version exists
+    "gametestImplementation"("org.geysermc.mcprotocollib:protocol:1.21.9-SNAPSHOT")
 }
 
 // Include common module classes in the fabric jar
