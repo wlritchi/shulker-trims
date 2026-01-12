@@ -40,6 +40,7 @@ import java.util.stream.Collectors;
  *   <li>{@code live_modification} - Live trim add/remove while player watches</li>
  *   <li>{@code chest_gui} - Chest GUI with trimmed shulker items</li>
  *   <li>{@code smithing_table} - Smithing table trim preview</li>
+ *   <li>{@code dispenser} - Dispenser-placed trimmed shulker sync</li>
  * </ul>
  *
  * <p>Additional test modes (not part of Paper test suite):
@@ -69,9 +70,11 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
     private static final String TEST_LIVE_MODIFICATION = "live_modification";
     private static final String TEST_CHEST_GUI = "chest_gui";
     private static final String TEST_SMITHING_TABLE = "smithing_table";
+    private static final String TEST_DISPENSER_PLACEMENT = "dispenser";
 
     private static final Set<String> ALL_PAPER_TESTS = Set.of(
-            TEST_WORLD, TEST_CHUNK_RELOAD, TEST_LIVE_MODIFICATION, TEST_CHEST_GUI, TEST_SMITHING_TABLE
+            TEST_WORLD, TEST_CHUNK_RELOAD, TEST_LIVE_MODIFICATION, TEST_CHEST_GUI, TEST_SMITHING_TABLE,
+            TEST_DISPENSER_PLACEMENT
     );
 
     /**
@@ -193,6 +196,17 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                 }
             }
 
+            if (enabledTests.contains(TEST_DISPENSER_PLACEMENT)) {
+                cleanupWorldViaRcon(launcher);
+                try {
+                    runPaperDispenserPlacementTest(context, address, launcher);
+                    passed++;
+                } catch (Exception | AssertionError e) {
+                    LOGGER.error("Paper dispenser placement test FAILED", e);
+                    failed++;
+                }
+            }
+
             LOGGER.info("=== Paper Tests Complete: {} passed, {} failed ===", passed, failed);
 
             if (failed > 0) {
@@ -284,6 +298,19 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
         // Note: Smithing table setup happens after connecting (needs player name)
         // Run the smithing table test
         testPaperSmithingTableConnection(context, address, launcher);
+    }
+
+    /**
+     * Run the Paper dispenser placement test with a shared server.
+     */
+    private void runPaperDispenserPlacementTest(ClientGameTestContext context, String address, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Dispenser Placement ===");
+
+        // Set up the dispenser with a trimmed shulker box
+        setupDispenserViaRcon(launcher);
+
+        // Run the dispenser placement test
+        testPaperDispenserPlacementConnection(context, address, launcher);
     }
 
     /**
@@ -468,6 +495,21 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             LOGGER.info("Chest setup complete (18 trimmed shulker items)");
         } catch (Exception e) {
             LOGGER.warn("RCON chest setup encountered errors: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Set up a dispenser with a trimmed shulker box item via RCON.
+     */
+    private void setupDispenserViaRcon(TestServerLauncher launcher) {
+        try {
+            for (String command : TestWorldSetup.generateDispenserSetupCommands()) {
+                String response = launcher.sendCommand(command);
+                LOGGER.debug("RCON [{}]: {}", command, response);
+            }
+            LOGGER.info("Dispenser setup complete (facing down with trimmed blue shulker box)");
+        } catch (Exception e) {
+            LOGGER.warn("RCON dispenser setup encountered errors: {}", e.getMessage());
         }
     }
 
@@ -806,6 +848,175 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
 
         context.waitTicks(20);
         LOGGER.info("Paper smithing table test completed successfully");
+    }
+
+    /**
+     * Test Paper server connection with dispenser-placed shulker box screenshot.
+     *
+     * <p>This test verifies that when a dispenser places a trimmed shulker box,
+     * the trim data is correctly synced to nearby clients. This exercises a
+     * different code path than player placement.
+     */
+    private void testPaperDispenserPlacementConnection(ClientGameTestContext context, String serverAddress, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Dispenser Placement Connection ===");
+
+        // Initiate connection
+        context.runOnClient(client -> {
+            ServerInfo serverInfo = new ServerInfo(
+                    "Test Paper Server",
+                    serverAddress,
+                    ServerInfo.ServerType.OTHER
+            );
+
+            ConnectScreen.connect(
+                    client.currentScreen,
+                    client,
+                    ServerAddress.parse(serverAddress),
+                    serverInfo,
+                    false,
+                    null
+            );
+        });
+
+        // Wait for world load
+        LOGGER.info("Waiting for world load...");
+        waitForWorldLoad(context);
+
+        // Verify we're connected
+        boolean isConnected = context.computeOnClient(client ->
+                client.world != null && client.player != null
+        );
+
+        if (!isConnected) {
+            throw new AssertionError("Failed to connect to Paper server");
+        }
+
+        LOGGER.info("Successfully connected to Paper server!");
+
+        // Wait for initial chunks to load
+        context.waitTicks(60);
+
+        // Get player name
+        String playerName = context.computeOnClient(client ->
+                client.player != null ? client.player.getGameProfile().name() : "Player0"
+        );
+
+        // Teleport to camera position to view dispenser output area
+        // Use spectator mode during teleport to prevent falling
+        try {
+            String teleportCommand = TestWorldSetup.generateDispenserTeleportCommand(playerName);
+            LOGGER.info("Teleport command: {}", teleportCommand);
+
+            // Use spectator mode to prevent falling during teleport
+            launcher.sendCommand("gamemode spectator " + playerName);
+            context.waitTicks(10);
+
+            // Teleport while in spectator mode
+            launcher.sendCommand(teleportCommand);
+            context.waitTicks(40);
+
+            // Switch to creative mode
+            launcher.sendCommand("gamemode creative " + playerName);
+            context.waitTicks(20);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to teleport player: {}", e.getMessage());
+        }
+
+        // Wait for chunks to render at camera position
+        context.waitTicks(40);
+
+        // Hide HUD for clean screenshots
+        context.runOnClient(client -> {
+            client.options.hudHidden = true;
+        });
+
+        // Log state before firing dispenser
+        context.runOnClient(client -> {
+            if (client.player != null && client.world != null) {
+                LOGGER.info("Player position: {}, {}, {}",
+                        client.player.getX(), client.player.getY(), client.player.getZ());
+
+                // Check if dispenser output area is clear
+                var outputPos = new net.minecraft.util.math.BlockPos(
+                        TestWorldSetup.DISPENSER_X, TestWorldSetup.DISPENSER_OUTPUT_Y, TestWorldSetup.DISPENSER_Z);
+                var block = client.world.getBlockState(outputPos).getBlock();
+                LOGGER.info("Block at dispenser output ({}, {}, {}): {}",
+                        TestWorldSetup.DISPENSER_X, TestWorldSetup.DISPENSER_OUTPUT_Y, TestWorldSetup.DISPENSER_Z,
+                        net.minecraft.registry.Registries.BLOCK.getId(block));
+            }
+        });
+
+        // Fire the dispenser by placing a redstone block
+        LOGGER.info("Firing dispenser...");
+        try {
+            String fireCommand = TestWorldSetup.generateFireDispenserCommand();
+            LOGGER.info("Fire command: {}", fireCommand);
+            String response = launcher.sendCommand(fireCommand);
+            LOGGER.info("Fire response: {}", response);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to fire dispenser: {}", e.getMessage());
+        }
+
+        // Wait for dispenser to fire and trim sync to occur
+        // Dispenser should activate immediately when redstone block is placed
+        context.waitTicks(20);
+
+        // Remove the redstone block and dispenser to ensure clean screenshot
+        // The dispenser has texture variability (animation states) that causes test flakiness
+        try {
+            launcher.sendCommand(String.format("setblock %d %d %d minecraft:air",
+                    TestWorldSetup.DISPENSER_X + 1, TestWorldSetup.DISPENSER_Y, TestWorldSetup.DISPENSER_Z));
+            launcher.sendCommand(String.format("setblock %d %d %d minecraft:air",
+                    TestWorldSetup.DISPENSER_X, TestWorldSetup.DISPENSER_Y, TestWorldSetup.DISPENSER_Z));
+        } catch (Exception e) {
+            LOGGER.warn("Failed to remove blocks: {}", e.getMessage());
+        }
+
+        // Wait for smoke particles to fully dissipate (3 seconds)
+        context.waitTicks(60);
+
+        // Verify the shulker box was placed
+        context.runOnClient(client -> {
+            if (client.world != null) {
+                var outputPos = new net.minecraft.util.math.BlockPos(
+                        TestWorldSetup.DISPENSER_X, TestWorldSetup.DISPENSER_OUTPUT_Y, TestWorldSetup.DISPENSER_Z);
+                var blockState = client.world.getBlockState(outputPos);
+                var block = blockState.getBlock();
+                LOGGER.info("Block at dispenser output after firing: {}",
+                        net.minecraft.registry.Registries.BLOCK.getId(block));
+
+                // Check if it's a shulker box
+                if (block instanceof net.minecraft.block.ShulkerBoxBlock) {
+                    LOGGER.info("Shulker box placed successfully!");
+                } else {
+                    LOGGER.warn("Expected shulker box but found: {}", block);
+                }
+            }
+        });
+
+        // Take screenshot and compare against golden template
+        // This verifies the trim is visible on the dispenser-placed shulker
+        TestScreenshotComparisonOptions options = TestScreenshotComparisonOptions.of("shulker-trim-dispenser-placed")
+                .withAlgorithm(TestScreenshotComparisonAlgorithm.meanSquaredDifference(COMPARISON_THRESHOLD))
+                .withSize(1920, 1080)
+                .save();
+
+        context.assertScreenshotEquals(options);
+        LOGGER.info("Screenshot comparison passed: shulker-trim-dispenser-placed");
+
+        // Restore HUD
+        context.runOnClient(client -> {
+            client.options.hudHidden = false;
+        });
+
+        // Disconnect from server
+        context.runOnClient(client -> {
+            LOGGER.info("Disconnecting from Paper server...");
+            client.disconnect(new TitleScreen(), false);
+        });
+
+        context.waitTicks(20);
+        LOGGER.info("Paper dispenser placement test completed successfully");
     }
 
     /**

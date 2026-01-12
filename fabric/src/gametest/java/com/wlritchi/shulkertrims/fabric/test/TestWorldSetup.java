@@ -226,6 +226,20 @@ public final class TestWorldSetup {
     public static final int SMITHING_TABLE_Y = 100;
     public static final int SMITHING_TABLE_Z = 0;
 
+    // Dispenser placement test constants
+    // Dispenser faces UP so shulker appears upright above it
+    public static final int DISPENSER_X = 0;
+    public static final int DISPENSER_Y = 99;   // Dispenser position (below output)
+    public static final int DISPENSER_Z = 0;
+    public static final int DISPENSER_OUTPUT_Y = 100;  // Where shulker lands (above dispenser)
+    // Player camera position to view the dispenser output
+    // Position player south of the shulker, looking north at it
+    public static final int DISPENSER_CAMERA_X = 0;
+    public static final int DISPENSER_CAMERA_Y = 102;  // 2 blocks above output for good view
+    public static final int DISPENSER_CAMERA_Z = 3;    // South of the shulker
+    public static final float DISPENSER_CAMERA_YAW = 180.0f;  // Looking north toward shulker
+    public static final float DISPENSER_CAMERA_PITCH = 30.0f;  // Looking down at shulker
+
     /**
      * Generate commands to set up a chest filled with trimmed shulker boxes.
      * Uses the same pattern/color/material combinations as the world test.
@@ -307,6 +321,75 @@ public final class TestWorldSetup {
         commands.add("item replace entity " + playerSelector + " hotbar.2 with redstone 1");
 
         return commands;
+    }
+
+    /**
+     * Generate commands to set up a dispenser with a trimmed shulker box.
+     * Uses blue shulker box + wild pattern + redstone material for visibility.
+     *
+     * <p>The dispenser is placed facing UP, so when activated it will place
+     * a shulker box on the block above it (upright orientation). This tests
+     * the Paper plugin's sync mechanism for dispenser-placed blocks.
+     *
+     * @return List of commands to execute in order
+     */
+    public static List<String> generateDispenserSetupCommands() {
+        var commands = new java.util.ArrayList<String>();
+
+        // Set time to noon and disable daylight cycle for consistent lighting
+        commands.add("gamerule doDaylightCycle false");
+        commands.add("time set noon");
+
+        // Force-load the chunk containing the test area
+        commands.add(String.format("forceload add %d %d", DISPENSER_X, DISPENSER_Z));
+
+        // Set world spawn near test area so chunks load
+        commands.add(String.format("setworldspawn %d %d %d",
+                DISPENSER_X, DISPENSER_OUTPUT_Y, DISPENSER_Z));
+
+        // Place barrier floor under the dispenser
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                DISPENSER_X - 1, DISPENSER_Y - 1, DISPENSER_Z - 1,
+                DISPENSER_X + 1, DISPENSER_Y - 1, DISPENSER_Z + 1));
+
+        // Place barrier platform for player at camera position
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                DISPENSER_CAMERA_X - 1, DISPENSER_CAMERA_Y - 1, DISPENSER_CAMERA_Z - 1,
+                DISPENSER_CAMERA_X + 1, DISPENSER_CAMERA_Y - 1, DISPENSER_CAMERA_Z + 1));
+
+        // Place dispenser facing UP so shulker box appears upright above it
+        // In MC, dispenser facing: 0=down, 1=up, 2=north, 3=south, 4=west, 5=east
+        commands.add(String.format("setblock %d %d %d minecraft:dispenser[facing=up]",
+                DISPENSER_X, DISPENSER_Y, DISPENSER_Z));
+
+        // Put a trimmed blue shulker box item in the dispenser
+        // Uses wild pattern + redstone material for good contrast
+        String dispenserItemCommand = String.format(
+                "item replace block %d %d %d container.0 with blue_shulker_box[custom_data={\"shulker_trims:trim\":{pattern:\"minecraft:wild\",material:\"minecraft:redstone\"}}]",
+                DISPENSER_X, DISPENSER_Y, DISPENSER_Z);
+        commands.add(dispenserItemCommand);
+
+        return commands;
+    }
+
+    /**
+     * Generate the command to fire the dispenser by placing a redstone block.
+     *
+     * @return The command to execute
+     */
+    public static String generateFireDispenserCommand() {
+        // Place redstone block adjacent to dispenser to power it
+        return String.format("setblock %d %d %d minecraft:redstone_block",
+                DISPENSER_X + 1, DISPENSER_Y, DISPENSER_Z);
+    }
+
+    /**
+     * Generate teleport command for dispenser test camera position.
+     */
+    public static String generateDispenserTeleportCommand(String playerSelector) {
+        return String.format("tp %s %d %d %d %.1f %.1f",
+                playerSelector, DISPENSER_CAMERA_X, DISPENSER_CAMERA_Y, DISPENSER_CAMERA_Z,
+                DISPENSER_CAMERA_YAW, DISPENSER_CAMERA_PITCH);
     }
 
     /**
