@@ -50,10 +50,12 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
         PAPER_LAUNCHED,         // Launch Paper server automatically
         PAPER_CHUNK_RELOAD,     // Test chunk unload/reload sync on Paper
         PAPER_LIVE_MODIFICATION,// Test live trim add/remove while player in range
+        PAPER_CHEST_GUI,        // Test chest GUI with trimmed shulker items
+        PAPER_SMITHING_TABLE,   // Test smithing table trim preview
         EXTERNAL_MANUAL         // Connect to manually-started server
     }
 
-    private static final TestMode TEST_MODE = TestMode.PAPER_LIVE_MODIFICATION;
+    private static final TestMode TEST_MODE = TestMode.PAPER_LAUNCHED;
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -62,6 +64,8 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             case PAPER_LAUNCHED -> testPaperServerLaunched(context);
             case PAPER_CHUNK_RELOAD -> testPaperChunkReloadSync(context);
             case PAPER_LIVE_MODIFICATION -> testPaperLiveModification(context);
+            case PAPER_CHEST_GUI -> testPaperChestGui(context);
+            case PAPER_SMITHING_TABLE -> testPaperSmithingTable(context);
             case EXTERNAL_MANUAL -> testExternalServerConnection(context, MANUAL_SERVER_ADDRESS);
         }
     }
@@ -269,6 +273,418 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
 
         context.waitTicks(20);
         LOGGER.info("Paper live modification test completed successfully");
+    }
+
+    /**
+     * Test chest GUI rendering with trimmed shulker items on Paper server.
+     *
+     * <p>This test verifies that trimmed shulker items render correctly in a chest GUI
+     * when connected to a Paper server. It compares against the singleplayer golden template.
+     */
+    private void testPaperChestGui(ClientGameTestContext context) {
+        LOGGER.info("=== Test: Paper Server Chest GUI ===");
+
+        try (TestServerLauncher launcher = new TestServerLauncher(
+                TestServerLauncher.ServerType.PAPER, TEST_SERVER_PORT)) {
+
+            // Start the server
+            launcher.start(180);
+
+            // Set up the chest with trimmed shulkers via RCON
+            LOGGER.info("Setting up chest with trimmed shulkers via RCON...");
+            setupChestViaRcon(launcher);
+
+            // Connect to the server
+            String address = launcher.getAddress();
+            LOGGER.info("Connecting to Paper server at {}", address);
+
+            // Run the chest GUI test
+            testPaperChestGuiConnection(context, address, launcher);
+
+        } catch (Exception e) {
+            LOGGER.error("Paper chest GUI test failed", e);
+            throw new AssertionError("Paper chest GUI test failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Set up a chest with trimmed shulker items via RCON.
+     */
+    private void setupChestViaRcon(TestServerLauncher launcher) {
+        try {
+            for (String command : TestWorldSetup.generateChestGuiSetupCommands()) {
+                String response = launcher.sendCommand(command);
+                LOGGER.debug("RCON [{}]: {}", command, response);
+            }
+            LOGGER.info("Chest setup complete (18 trimmed shulker items)");
+        } catch (Exception e) {
+            LOGGER.warn("RCON chest setup encountered errors: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Test Paper server connection with chest GUI screenshot.
+     */
+    private void testPaperChestGuiConnection(ClientGameTestContext context, String serverAddress, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Chest GUI Connection ===");
+
+        // Initiate connection
+        context.runOnClient(client -> {
+            ServerInfo serverInfo = new ServerInfo(
+                    "Test Paper Server",
+                    serverAddress,
+                    ServerInfo.ServerType.OTHER
+            );
+
+            ConnectScreen.connect(
+                    client.currentScreen,
+                    client,
+                    ServerAddress.parse(serverAddress),
+                    serverInfo,
+                    false,
+                    null
+            );
+        });
+
+        // Wait for world load
+        LOGGER.info("Waiting for world load...");
+        waitForWorldLoad(context);
+
+        // Verify we're connected
+        boolean isConnected = context.computeOnClient(client ->
+                client.world != null && client.player != null
+        );
+
+        if (!isConnected) {
+            throw new AssertionError("Failed to connect to Paper server");
+        }
+
+        LOGGER.info("Successfully connected to Paper server!");
+
+        // Wait for initial chunks to load
+        context.waitTicks(60);
+
+        // Get player name
+        String playerName = context.computeOnClient(client ->
+                client.player != null ? client.player.getGameProfile().name() : "Player0"
+        );
+
+        // Teleport to chest position
+        String teleportCommand = TestWorldSetup.generateGuiTeleportCommand(
+                playerName, TestWorldSetup.CHEST_X, TestWorldSetup.CHEST_Y, TestWorldSetup.CHEST_Z);
+        LOGGER.info("Teleport command: {}", teleportCommand);
+
+        try {
+            // Set creative mode and spectator briefly to stop falling
+            launcher.sendCommand("gamemode spectator " + playerName);
+            context.waitTicks(10);
+
+            // Teleport while in spectator mode (won't fall)
+            String tpResp = launcher.sendCommand(teleportCommand);
+            LOGGER.info("Teleport response: {}", tpResp);
+            context.waitTicks(40);
+
+            // Switch back to creative
+            launcher.sendCommand("gamemode creative " + playerName);
+            context.waitTicks(20);
+
+            // Verify position
+            Double playerY = context.computeOnClient(client ->
+                client.player != null ? client.player.getY() : null
+            );
+            LOGGER.info("Player Y after teleport: {}", playerY);
+
+            // If still not at correct position, retry
+            if (playerY == null || Math.abs(playerY - TestWorldSetup.CHEST_Y) > 5) {
+                LOGGER.warn("Player not at target position, retrying teleport");
+                launcher.sendCommand("gamemode spectator " + playerName);
+                context.waitTicks(10);
+                launcher.sendCommand(teleportCommand);
+                context.waitTicks(40);
+                launcher.sendCommand("gamemode creative " + playerName);
+                context.waitTicks(20);
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed during teleport: {}", e.getMessage());
+        }
+
+        // Final wait for chunks to render
+        context.waitTicks(40);
+
+        // Log final player position
+        context.runOnClient(client -> {
+            if (client.player != null) {
+                LOGGER.info("Player position after teleport: {}, {}, {}",
+                        client.player.getX(), client.player.getY(), client.player.getZ());
+                if (client.world != null) {
+                    var chestPos = new net.minecraft.util.math.BlockPos(
+                            TestWorldSetup.CHEST_X, TestWorldSetup.CHEST_Y, TestWorldSetup.CHEST_Z);
+                    var block = client.world.getBlockState(chestPos).getBlock();
+                    LOGGER.info("Block at chest position: {}",
+                            net.minecraft.registry.Registries.BLOCK.getId(block));
+                }
+            }
+        });
+
+        // Hide HUD for clean screenshot
+        context.runOnClient(client -> {
+            client.options.hudHidden = true;
+        });
+
+        // Open the chest by simulating right-click
+        context.runOnClient(client -> {
+            if (client.player != null && client.interactionManager != null) {
+                var chestPos = new net.minecraft.util.math.BlockPos(
+                        TestWorldSetup.CHEST_X, TestWorldSetup.CHEST_Y, TestWorldSetup.CHEST_Z);
+                client.interactionManager.interactBlock(
+                        client.player,
+                        net.minecraft.util.Hand.MAIN_HAND,
+                        new net.minecraft.util.hit.BlockHitResult(
+                                chestPos.toCenterPos(),
+                                net.minecraft.util.math.Direction.UP,
+                                chestPos,
+                                false
+                        )
+                );
+            }
+        });
+
+        // Wait for chest screen to open
+        context.waitTicks(20);
+
+        // Verify chest screen is open
+        boolean isChestOpen = context.computeOnClient(client ->
+                client.currentScreen instanceof net.minecraft.client.gui.screen.ingame.GenericContainerScreen
+        );
+
+        if (!isChestOpen) {
+            LOGGER.warn("Chest screen did not open, taking diagnostic screenshot");
+            context.takeScreenshot("paper-chest-gui-failed");
+            throw new AssertionError("Failed to open chest screen");
+        }
+
+        LOGGER.info("Chest screen opened, taking screenshot");
+
+        // Compare against the golden template
+        TestScreenshotComparisonOptions options = TestScreenshotComparisonOptions.of("shulker-trim-comprehensive-inventory")
+                .withAlgorithm(TestScreenshotComparisonAlgorithm.meanSquaredDifference(COMPARISON_THRESHOLD))
+                .save();
+        context.assertScreenshotEquals(options);
+        LOGGER.info("Screenshot comparison passed: shulker-trim-comprehensive-inventory (Paper server)");
+
+        // Close chest and restore HUD
+        context.runOnClient(client -> {
+            client.options.hudHidden = false;
+            client.setScreen(null);
+        });
+        context.waitTicks(5);
+
+        // Disconnect from server
+        context.runOnClient(client -> {
+            LOGGER.info("Disconnecting from Paper server...");
+            client.disconnect(new TitleScreen(), false);
+        });
+
+        context.waitTicks(20);
+        LOGGER.info("Paper chest GUI test completed successfully");
+    }
+
+    /**
+     * Test smithing table GUI rendering with trim preview on Paper server.
+     *
+     * <p>This test verifies that the smithing table trim preview renders correctly
+     * when connected to a Paper server. It compares against the singleplayer golden template.
+     */
+    private void testPaperSmithingTable(ClientGameTestContext context) {
+        LOGGER.info("=== Test: Paper Server Smithing Table ===");
+
+        try (TestServerLauncher launcher = new TestServerLauncher(
+                TestServerLauncher.ServerType.PAPER, TEST_SERVER_PORT)) {
+
+            // Start the server
+            launcher.start(180);
+
+            // Connect first to get player name, then set up
+            String address = launcher.getAddress();
+            LOGGER.info("Connecting to Paper server at {}", address);
+
+            // Run the smithing table test
+            testPaperSmithingTableConnection(context, address, launcher);
+
+        } catch (Exception e) {
+            LOGGER.error("Paper smithing table test failed", e);
+            throw new AssertionError("Paper smithing table test failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Test Paper server connection with smithing table GUI screenshot.
+     */
+    private void testPaperSmithingTableConnection(ClientGameTestContext context, String serverAddress, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Smithing Table Connection ===");
+
+        // Initiate connection
+        context.runOnClient(client -> {
+            ServerInfo serverInfo = new ServerInfo(
+                    "Test Paper Server",
+                    serverAddress,
+                    ServerInfo.ServerType.OTHER
+            );
+
+            ConnectScreen.connect(
+                    client.currentScreen,
+                    client,
+                    ServerAddress.parse(serverAddress),
+                    serverInfo,
+                    false,
+                    null
+            );
+        });
+
+        // Wait for world load
+        LOGGER.info("Waiting for world load...");
+        waitForWorldLoad(context);
+
+        // Verify we're connected
+        boolean isConnected = context.computeOnClient(client ->
+                client.world != null && client.player != null
+        );
+
+        if (!isConnected) {
+            throw new AssertionError("Failed to connect to Paper server");
+        }
+
+        LOGGER.info("Successfully connected to Paper server!");
+
+        // Wait for initial chunks to load
+        context.waitTicks(60);
+
+        // Get player name
+        String playerName = context.computeOnClient(client ->
+                client.player != null ? client.player.getGameProfile().name() : "Player0"
+        );
+
+        // Set up smithing table and give player items via RCON
+        LOGGER.info("Setting up smithing table via RCON...");
+        try {
+            for (String command : TestWorldSetup.generateSmithingTableSetupCommands(playerName)) {
+                String response = launcher.sendCommand(command);
+                LOGGER.debug("RCON [{}]: {}", command, response);
+            }
+            LOGGER.info("Smithing table setup complete");
+        } catch (Exception e) {
+            LOGGER.warn("RCON smithing table setup encountered errors: {}", e.getMessage());
+        }
+
+        // Teleport to smithing table position
+        try {
+            String teleportCommand = TestWorldSetup.generateGuiTeleportCommand(
+                    playerName, TestWorldSetup.SMITHING_TABLE_X, TestWorldSetup.SMITHING_TABLE_Y, TestWorldSetup.SMITHING_TABLE_Z);
+            launcher.sendCommand(teleportCommand);
+            launcher.sendCommand("gamemode creative " + playerName);
+        } catch (Exception e) {
+            LOGGER.warn("Failed to teleport player: {}", e.getMessage());
+        }
+
+        // Wait for chunks to load
+        context.waitTicks(40);
+
+        // Hide HUD for clean screenshot
+        context.runOnClient(client -> {
+            client.options.hudHidden = true;
+        });
+
+        // Open the smithing table by simulating right-click
+        context.runOnClient(client -> {
+            if (client.player != null && client.interactionManager != null) {
+                var smithingPos = new net.minecraft.util.math.BlockPos(
+                        TestWorldSetup.SMITHING_TABLE_X, TestWorldSetup.SMITHING_TABLE_Y, TestWorldSetup.SMITHING_TABLE_Z);
+                client.interactionManager.interactBlock(
+                        client.player,
+                        net.minecraft.util.Hand.MAIN_HAND,
+                        new net.minecraft.util.hit.BlockHitResult(
+                                smithingPos.toCenterPos(),
+                                net.minecraft.util.math.Direction.UP,
+                                smithingPos,
+                                false
+                        )
+                );
+            }
+        });
+
+        // Wait for smithing table screen to open
+        context.waitForScreen(net.minecraft.client.gui.screen.ingame.SmithingScreen.class);
+        context.waitTicks(10);
+
+        // Move items from hotbar into smithing table slots using shift-click
+        // SmithingScreenHandler slot mapping: 0=template, 1=base, 2=addition, 3=result, 4-30=inventory, 31-39=hotbar
+        context.runOnClient(client -> {
+            if (client.player != null && client.interactionManager != null &&
+                client.player.currentScreenHandler instanceof net.minecraft.screen.SmithingScreenHandler handler) {
+                // Shift-click template from hotbar slot 31
+                client.interactionManager.clickSlot(handler.syncId, 31, 0,
+                        net.minecraft.screen.slot.SlotActionType.QUICK_MOVE, client.player);
+            }
+        });
+        context.waitTicks(3);
+
+        context.runOnClient(client -> {
+            if (client.player != null && client.interactionManager != null &&
+                client.player.currentScreenHandler instanceof net.minecraft.screen.SmithingScreenHandler handler) {
+                // Shift-click shulker box from hotbar slot 32
+                client.interactionManager.clickSlot(handler.syncId, 32, 0,
+                        net.minecraft.screen.slot.SlotActionType.QUICK_MOVE, client.player);
+            }
+        });
+        context.waitTicks(3);
+
+        context.runOnClient(client -> {
+            if (client.player != null && client.interactionManager != null &&
+                client.player.currentScreenHandler instanceof net.minecraft.screen.SmithingScreenHandler handler) {
+                // Shift-click redstone from hotbar slot 33
+                client.interactionManager.clickSlot(handler.syncId, 33, 0,
+                        net.minecraft.screen.slot.SlotActionType.QUICK_MOVE, client.player);
+            }
+        });
+        context.waitTicks(10);
+
+        // Log the current state
+        context.runOnClient(client -> {
+            if (client.currentScreen == null) {
+                LOGGER.error("Smithing screen closed unexpectedly!");
+            } else {
+                LOGGER.info("Screen still open: {}", client.currentScreen.getClass().getSimpleName());
+                if (client.player.currentScreenHandler instanceof net.minecraft.screen.SmithingScreenHandler handler) {
+                    LOGGER.info("Slot 0 (template): {}", handler.getSlot(0).getStack());
+                    LOGGER.info("Slot 1 (base): {}", handler.getSlot(1).getStack());
+                    LOGGER.info("Slot 2 (addition): {}", handler.getSlot(2).getStack());
+                    LOGGER.info("Slot 3 (result): {}", handler.getSlot(3).getStack());
+                }
+            }
+        });
+
+        // Compare against the golden template
+        TestScreenshotComparisonOptions options = TestScreenshotComparisonOptions.of("shulker-trim-smithing-preview")
+                .withAlgorithm(TestScreenshotComparisonAlgorithm.meanSquaredDifference(COMPARISON_THRESHOLD))
+                .save();
+        context.assertScreenshotEquals(options);
+        LOGGER.info("Screenshot comparison passed: shulker-trim-smithing-preview (Paper server)");
+
+        // Close smithing table and restore HUD
+        context.runOnClient(client -> {
+            client.options.hudHidden = false;
+            client.setScreen(null);
+        });
+        context.waitForScreen(null);
+
+        // Disconnect from server
+        context.runOnClient(client -> {
+            LOGGER.info("Disconnecting from Paper server...");
+            client.disconnect(new TitleScreen(), false);
+        });
+
+        context.waitTicks(20);
+        LOGGER.info("Paper smithing table test completed successfully");
     }
 
     /**

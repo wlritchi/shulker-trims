@@ -164,7 +164,8 @@ public final class TestWorldSetup {
         // Disable mob spawning completely
         commands.add("gamerule doMobSpawning false");
 
-        // Set time to noon for consistent lighting
+        // Disable daylight cycle and set time to noon for consistent lighting
+        commands.add("gamerule doDaylightCycle false");
         commands.add("time set noon");
 
         // Disable weather
@@ -213,6 +214,107 @@ public final class TestWorldSetup {
     public static String generateTeleportCommand(String playerSelector) {
         return String.format("tp %s %d %d %d %.1f %.1f",
                 playerSelector, CAMERA_X, CAMERA_Y, CAMERA_Z, CAMERA_YAW, CAMERA_PITCH);
+    }
+
+    // Chest GUI test constants
+    public static final int CHEST_X = 0;
+    public static final int CHEST_Y = 100;
+    public static final int CHEST_Z = 0;
+
+    // Smithing table test constants
+    public static final int SMITHING_TABLE_X = 0;
+    public static final int SMITHING_TABLE_Y = 100;
+    public static final int SMITHING_TABLE_Z = 0;
+
+    /**
+     * Generate commands to set up a chest filled with trimmed shulker boxes.
+     * Uses the same pattern/color/material combinations as the world test.
+     *
+     * @return List of commands to execute in order
+     */
+    public static List<String> generateChestGuiSetupCommands() {
+        var commands = new java.util.ArrayList<String>();
+
+        // Set time to noon and disable daylight cycle for consistent lighting
+        commands.add("gamerule doDaylightCycle false");
+        commands.add("time set noon");
+
+        // Force-load the chunk containing the test area
+        commands.add(String.format("forceload add %d %d", CHEST_X, CHEST_Z));
+
+        // Set world spawn near test area so chunks load
+        commands.add(String.format("setworldspawn %d %d %d", CHEST_X, CHEST_Y, CHEST_Z + 1));
+
+        // Place barrier floor for player (larger area for stability)
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                CHEST_X - 1, CHEST_Y - 1, CHEST_Z - 1,
+                CHEST_X + 1, CHEST_Y - 1, CHEST_Z + 2));
+
+        // Place chest
+        commands.add(String.format("setblock %d %d %d minecraft:chest", CHEST_X, CHEST_Y, CHEST_Z));
+
+        // Fill chest with trimmed shulkers
+        // In MC 1.21+, we use /item modify or /item replace to set items with components
+        for (int i = 0; i < 18; i++) {
+            String shulkerItemId = ALL_SHULKER_BLOCKS.get(i % ALL_SHULKER_BLOCKS.size())
+                    .replace("minecraft:", "");  // e.g., "shulker_box", "white_shulker_box"
+            String pattern = ALL_PATTERNS.get(i);
+            String material = CONTRASTING_MATERIALS.get(i);
+
+            // Use /item replace with custom_data component
+            // Format: item replace block <pos> container.<slot> with <item>[custom_data={...}]
+            String itemCommand = String.format(
+                    "item replace block %d %d %d container.%d with %s[custom_data={\"shulker_trims:trim\":{pattern:\"%s\",material:\"%s\"}}]",
+                    CHEST_X, CHEST_Y, CHEST_Z, i, shulkerItemId, pattern, material);
+            commands.add(itemCommand);
+        }
+
+        return commands;
+    }
+
+    /**
+     * Generate commands to set up a smithing table with trim preview items.
+     * Uses blue shulker box + wild pattern + redstone material for high contrast.
+     *
+     * @param playerSelector The player to give items to
+     * @return List of commands to execute in order
+     */
+    public static List<String> generateSmithingTableSetupCommands(String playerSelector) {
+        var commands = new java.util.ArrayList<String>();
+
+        // Set time to noon and disable daylight cycle for consistent lighting
+        commands.add("gamerule doDaylightCycle false");
+        commands.add("time set noon");
+
+        // Force-load the chunk containing the test area
+        commands.add(String.format("forceload add %d %d", SMITHING_TABLE_X, SMITHING_TABLE_Z));
+
+        // Set world spawn near test area so chunks load
+        commands.add(String.format("setworldspawn %d %d %d", SMITHING_TABLE_X, SMITHING_TABLE_Y, SMITHING_TABLE_Z + 1));
+
+        // Place barrier floor for player (larger area for stability)
+        commands.add(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                SMITHING_TABLE_X - 1, SMITHING_TABLE_Y - 1, SMITHING_TABLE_Z - 1,
+                SMITHING_TABLE_X + 1, SMITHING_TABLE_Y - 1, SMITHING_TABLE_Z + 2));
+
+        // Place smithing table
+        commands.add(String.format("setblock %d %d %d minecraft:smithing_table",
+                SMITHING_TABLE_X, SMITHING_TABLE_Y, SMITHING_TABLE_Z));
+
+        // Give player items in hotbar (same as singleplayer test)
+        commands.add("item replace entity " + playerSelector + " hotbar.0 with wild_armor_trim_smithing_template 1");
+        commands.add("item replace entity " + playerSelector + " hotbar.1 with blue_shulker_box 1");
+        commands.add("item replace entity " + playerSelector + " hotbar.2 with redstone 1");
+
+        return commands;
+    }
+
+    /**
+     * Generate teleport command to chest/smithing table position for GUI tests.
+     */
+    public static String generateGuiTeleportCommand(String playerSelector, int x, int y, int z) {
+        // Teleport to just south of the block, facing north
+        return String.format("tp %s %d %d %d 0 0", playerSelector, x, y, z + 1);
     }
 
     /**

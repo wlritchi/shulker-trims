@@ -375,6 +375,11 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
 
             singleplayer.getClientWorld().waitForChunksRender();
 
+            // Set time to noon and disable daylight cycle for consistent lighting
+            singleplayer.getServer().runCommand("gamerule doDaylightCycle false");
+            singleplayer.getServer().runCommand("time set noon");
+            context.waitTicks(5);
+
             // Wait for recipe unlock toast to disappear (takes ~5 seconds)
             context.waitTicks(120);
 
@@ -464,6 +469,11 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
         try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
 
             singleplayer.getClientWorld().waitForChunksRender();
+
+            // Set time to noon and disable daylight cycle for consistent lighting
+            singleplayer.getServer().runCommand("gamerule doDaylightCycle false");
+            singleplayer.getServer().runCommand("time set noon");
+            context.waitTicks(5);
 
             // Wait for recipe unlock toast to disappear
             context.waitTicks(120);
