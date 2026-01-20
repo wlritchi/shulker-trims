@@ -173,8 +173,25 @@ dependencies {
     implementation(project(":common"))
 
     // MCProtocolLib for bot client in two-player tests
-    // Using pinned 1.21.9 snapshot (protocol-compatible with MC 1.21.10)
-    "gametestImplementation"("org.geysermc.mcprotocollib:protocol:1.21.9-20251210.010914-21")
+    // Using 1.21.9-SNAPSHOT (protocol-compatible with MC 1.21.10)
+    "gametestImplementation"("org.geysermc.mcprotocollib:protocol:1.21.9-SNAPSHOT")
+}
+
+// Reproducible SNAPSHOT dependency resolution (same pattern as bukkit module):
+// 1. Dependencies use base SNAPSHOT versions
+// 2. resolutionStrategy substitutes to specific timestamped builds during resolution
+// 3. verification-metadata.xml checksums verify the exact artifacts downloaded
+val snapshotPins = mapOf(
+    "org.geysermc.mcprotocollib:protocol" to "1.21.9-20251210.010914-21"
+)
+
+configurations.all {
+    resolutionStrategy.eachDependency {
+        val key = "${requested.group}:${requested.name}"
+        snapshotPins[key]?.let { pinnedVersion ->
+            useVersion(pinnedVersion)
+        }
+    }
 }
 
 // Include common module classes in the fabric jar
