@@ -173,8 +173,8 @@ dependencies {
     implementation(project(":common"))
 
     // MCProtocolLib for bot client in two-player tests
-    // Using 1.21.9-SNAPSHOT since no exact 1.21.10 version exists
-    "gametestImplementation"("org.geysermc.mcprotocollib:protocol:1.21.9-SNAPSHOT")
+    // Using pinned 1.21.9 snapshot (protocol-compatible with MC 1.21.10)
+    "gametestImplementation"("org.geysermc.mcprotocollib:protocol:1.21.9-20251210.010914-21")
 }
 
 // Include common module classes in the fabric jar

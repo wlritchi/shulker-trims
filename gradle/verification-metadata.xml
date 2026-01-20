@@ -8,21 +8,19 @@
               They can't be verified against remote checksums. -->
          <trust group="remapped.net.fabricmc.fabric-api"/>
          <trust group="net.minecraft"/>
-         <!-- MCProtocolLib and its dependencies for gametest bot client -->
-         <trust group="org.geysermc.mcprotocollib"/>
-         <trust group="org.cloudburstmc"/>
-         <trust group="org.cloudburstmc.math"/>
-         <trust group="org.cloudburstmc.netty"/>
-         <trust group="net.raphimc"/>
-         <trust group="net.lenni0451.commons"/>
-         <trust group="com.nukkitx.fastutil"/>
-         <trust group="io.netty"/>
-         <trust group="io.jsonwebtoken"/>
-         <trust group="net.kyori"/>
-         <trust group="org.checkerframework"/>
-         <trust group="com.google.errorprone"/>
-         <trust group="com.google.code.gson"/>
-         <trust group="org.jspecify"/>
+         <!-- MCProtocolLib and transitive dependencies (version-pinned for security) -->
+         <trust group="org.geysermc.mcprotocollib" name="protocol"/>
+         <trust group="io.netty" version="4.2.1.Final"/>
+         <trust group="com.nukkitx.fastutil" version="8.5.3"/>
+         <trust group="org.cloudburstmc.math" version="2.0"/>
+         <trust group="org.cloudburstmc" name="nbt" version="3.0.0.Final"/>
+         <trust group="net.kyori" version="4.25.0"/>
+         <trust group="org.checkerframework" name="checker-qual" version="3.42.0"/>
+         <trust group="com.google.errorprone" version="2.41.0"/>
+         <trust group="com.google.code.gson" version="2.13.2"/>
+         <trust group="org.jspecify" name="jspecify" version="1.0.0"/>
+         <trust group="net.lenni0451.commons" version="1.9.0"/>
+         <trust group="net.raphimc" name="MinecraftAuth" version="5.0.0"/>
       </trusted-artifacts>
    </configuration>
    <components>
