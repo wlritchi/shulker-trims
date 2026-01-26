@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "shulker_trims_icongen",
+  "version": "1.0.0",
+  "name": "Shulker Trims Icon Generator",
+  "description": "Generates isometric icon renders for Shulker Trims mod",
+  "authors": ["wlritchi"],
+  "license": "CC0-1.0",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "com.wlritchi.shulkertrims.fabric.icongen.IconGenerator"
+    ]
+  },
+  "depends": {
+    "shulker_trims": "*",
+    "orthocamera": "*",
+    "fabricloader": ">=0.16.0",
+    "minecraft": "1.21.10",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
