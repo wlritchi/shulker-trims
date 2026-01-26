@@ -16,6 +16,27 @@ Shulker Trims is a Minecraft mod that adds the ability to apply armor trim patte
 ./gradlew :fabric:genSources  # Generate Minecraft sources for IDE support
 ```
 
+## Dependency Verification
+
+This project uses Gradle's dependency verification (`gradle/verification-metadata.xml`) to ensure
+build reproducibility and detect supply chain attacks. All dependencies must have their checksums
+recorded.
+
+**Important**: Gradle's `--write-verification-metadata` flag does NOT work correctly with this
+project due to bugs related to how we pin SNAPSHOT dependencies (MCProtocolLib). The snapshot
+pinning in `build.gradle.kts` uses `resolutionStrategy` with exact version strings, which is the
+only approach compatible with verification—but Gradle's metadata writer creates duplicate entries.
+
+**When adding new dependencies or updating versions**:
+1. Run the build and note which artifacts fail verification
+2. Manually fetch checksums from Maven Central (use the `.sha256` files)
+3. Add entries to `gradle/verification-metadata.xml` following the existing format
+
+Example for fetching a checksum:
+```bash
+curl -sL "https://repo1.maven.org/maven2/io/netty/netty-codec/4.2.1.Final/netty-codec-4.2.1.Final.jar.sha256"
+```
+
 Output JARs:
 - `fabric/build/libs/shulker-trims-mc1.21.10-fabric-1.0.0.jar` — Fabric-only mod
 - `bukkit/build/libs/shulker-trims-mc1.21.10-bukkit-1.0.0.jar` — Bukkit-only plugin

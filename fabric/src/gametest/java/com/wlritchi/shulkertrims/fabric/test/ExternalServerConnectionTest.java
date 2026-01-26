@@ -555,6 +555,15 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             }
 
             LOGGER.info("Block placement via protocol SUCCEEDED!");
+
+            // Teleport TrimBot out of frame before taking screenshot
+            // The bot's idle animation causes non-deterministic screenshots
+            try {
+                launcher.sendCommand("tp " + bot.getUsername() + " 0 -100 0");
+                LOGGER.info("Teleported bot out of frame for screenshot");
+            } catch (Exception e) {
+                LOGGER.warn("Failed to teleport bot out of frame: {}", e.getMessage());
+            }
             context.waitTicks(20);
 
             // Verify the block was placed (from observer's perspective)
