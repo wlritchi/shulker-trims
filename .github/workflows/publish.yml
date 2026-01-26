@@ -1,0 +1,60 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'      # 1.0.0
+      - '[0-9]+.[0-9]+.[0-9]+-*'    # 1.0.0-rc2, 1.0.0-beta.1
+
+env:
+  java_version: 21
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for GitHub Releases
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Set up Java ${{ env.java_version }}
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9  # v4.8.0
+        with:
+          java-version: ${{ env.java_version }}
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@da187c8e6ffbd3802e00f2477aa5a822b25f2dda  # v4.4.4
+
+      - name: Build all modules
+        run: ./gradlew build
+
+      - name: Detect version type
+        id: version-type
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "type=release" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" == *"-alpha"* ]]; then
+            echo "type=alpha" >> $GITHUB_OUTPUT
+          else
+            echo "type=beta" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to Modrinth and GitHub
+        uses: Kir-Antipov/mc-publish@995edadc13559a8b28d0b7e6571229f067ec7659  # v3.3.0
+        with:
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-generate-changelog: true
+
+          files: build/forgix/shulker-trims-*.jar
+          version: ${{ github.ref_name }}
+          version-type: ${{ steps.version-type.outputs.type }}
+          loaders: |
+            fabric
+            paper
+          java: ${{ env.java_version }}

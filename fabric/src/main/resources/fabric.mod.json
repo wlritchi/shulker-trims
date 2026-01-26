@@ -9,6 +9,11 @@
   "license": "CC0-1.0",
   "icon": "assets/shulker_trims/icon.png",
   "environment": "*",
+  "custom": {
+    "mc-publish": {
+      "modrinth": "fn4DBiPa"
+    }
+  },
   "entrypoints": {
     "main": ["com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod"],
     "client": ["com.wlritchi.shulkertrims.fabric.client.ShulkerTrimsClient"]
