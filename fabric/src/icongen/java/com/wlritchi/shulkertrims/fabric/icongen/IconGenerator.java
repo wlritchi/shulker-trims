@@ -61,4 +61,74 @@ public class IconGenerator implements FabricClientGameTest {
         // TODO: Implement icon generation loop
         LOGGER.info("Icon generation complete (skeleton - no icons generated yet)");
     }
+
+    /**
+     * Sets up the scene for icon capture: creates world, places shulker, configures camera.
+     */
+    private void setupScene(TestSingleplayerContext singleplayer, ClientGameTestContext context,
+                           String color, String pattern, String material) {
+        BlockPos shulkerPos = new BlockPos(0, 100, 0);
+
+        // Place the shulker box with trim
+        singleplayer.getServer().runOnServer(server -> {
+            ServerWorld world = server.getOverworld();
+
+            Block shulkerBlock = COLOR_TO_BLOCK.getOrDefault(color, Blocks.PURPLE_SHULKER_BOX);
+            world.setBlockState(shulkerPos, shulkerBlock.getDefaultState());
+
+            if (world.getBlockEntity(shulkerPos) instanceof ShulkerBoxBlockEntity be) {
+                if (be instanceof TrimmedShulkerBox trimmedBE) {
+                    String fullPattern = pattern.contains(":") ? pattern : "minecraft:" + pattern;
+                    String fullMaterial = material.contains(":") ? material : "minecraft:" + material;
+                    trimmedBE.shulkerTrims$setTrim(new ShulkerTrim(fullPattern, fullMaterial));
+                    be.markDirty();
+                }
+            }
+        });
+
+        // Wait for chunk to render
+        context.waitTicks(20);
+        singleplayer.getClientWorld().waitForChunksRender();
+
+        // Set time to noon for consistent lighting
+        singleplayer.getServer().runCommand("time set noon");
+        singleplayer.getServer().runCommand("gamerule doDaylightCycle false");
+        context.waitTicks(5);
+
+        // Configure OrthoCamera for isometric view
+        configureOrthoCamera();
+
+        // Position player/camera for isometric view
+        // Camera looks at shulker from front-right, 45° yaw, 30° pitch
+        float yaw = 225f;  // Looking toward -X, -Z (southwest in MC terms)
+        float pitch = 30f; // Slight downward angle
+        int cameraX = 3;
+        int cameraY = 102;
+        int cameraZ = 3;
+
+        singleplayer.getServer().runCommand(
+                String.format("tp @p %d %d %d %.1f %.1f", cameraX, cameraY, cameraZ, yaw, pitch)
+        );
+        context.waitTicks(10);
+
+        // Hide HUD for clean capture
+        context.runOnClient(client -> {
+            client.options.hudHidden = true;
+        });
+        context.waitTicks(2);
+    }
+
+    /**
+     * Configures OrthoCamera for isometric icon rendering.
+     */
+    private void configureOrthoCamera() {
+        var config = OrthoCamera.CONFIG;
+        config.enabled = true;
+        config.fixed = true;
+        config.setFixedYaw(225f);   // Match camera yaw
+        config.setFixedPitch(30f);  // Match camera pitch
+        config.setScaleX(2.5f);     // Zoom to frame shulker tightly
+        config.setScaleY(2.5f);
+        config.auto_third_person = false; // We'll handle camera mode ourselves
+    }
 }
