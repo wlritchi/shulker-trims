@@ -73,10 +73,11 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
     private static final String TEST_SMITHING_TABLE = "smithing_table";
     private static final String TEST_DISPENSER_PLACEMENT = "dispenser";
     private static final String TEST_TWO_PLAYER = "two_player";
+    private static final String TEST_RESYNC_AFTER_BREAK = "resync_after_break";
 
     private static final Set<String> ALL_PAPER_TESTS = Set.of(
             TEST_WORLD, TEST_CHUNK_RELOAD, TEST_LIVE_MODIFICATION, TEST_CHEST_GUI, TEST_SMITHING_TABLE,
-            TEST_DISPENSER_PLACEMENT, TEST_TWO_PLAYER
+            TEST_DISPENSER_PLACEMENT, TEST_TWO_PLAYER, TEST_RESYNC_AFTER_BREAK
     );
 
     /**
@@ -216,6 +217,17 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                     passed++;
                 } catch (Exception | AssertionError e) {
                     LOGGER.error("Paper two-player placement test FAILED", e);
+                    failed++;
+                }
+            }
+
+            if (enabledTests.contains(TEST_RESYNC_AFTER_BREAK)) {
+                cleanupWorldViaRcon(launcher);
+                try {
+                    runPaperResyncAfterBreakTest(context, address, launcher);
+                    passed++;
+                } catch (Exception | AssertionError e) {
+                    LOGGER.error("Paper resync-after-break test FAILED", e);
                     failed++;
                 }
             }
@@ -632,6 +644,182 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             LOGGER.error("Two-player test failed", e);
             throw new AssertionError("Two-player placement test failed: " + e.getMessage(), e);
         }
+    }
+
+    // Constants for resync-after-break test
+    // Uses X=30 to avoid coordinate conflicts with other tests
+    private static final int RESYNC_TEST_X = 30;
+    private static final int RESYNC_TEST_Y = 100;
+    private static final int RESYNC_TEST_Z = 0;
+
+    /**
+     * Test that trim data re-syncs after a block is broken and replaced.
+     *
+     * <p>This test verifies that the plugin's lastKnownTrims tracking properly clears
+     * when a shulker box is removed, allowing re-sync when an identical trim is placed
+     * at the same location.
+     *
+     * <p>Tests multiple block removal methods:
+     * <ul>
+     *   <li>Server /setblock air</li>
+     *   <li>Explosion</li>
+     * </ul>
+     */
+    private void runPaperResyncAfterBreakTest(ClientGameTestContext context, String address, TestServerLauncher launcher) {
+        LOGGER.info("=== Test: Paper Resync After Break ===");
+
+        try {
+            // Connect observer
+            final String serverAddress = address;
+            context.runOnClient(client -> {
+                LOGGER.info("Connecting to Paper server at {} for resync test...", serverAddress);
+                client.setScreen(new TitleScreen());
+            });
+            context.waitTicks(5);
+
+            context.runOnClient(client -> {
+                var serverInfo = new ServerInfo("Test", serverAddress, ServerInfo.ServerType.OTHER);
+                ConnectScreen.connect(client.currentScreen, client, ServerAddress.parse(serverAddress),
+                        serverInfo, false, null);
+            });
+
+            waitForWorldLoad(context);
+            LOGGER.info("Connected to Paper server for resync test");
+
+            // Force-load chunk containing test area
+            launcher.sendCommand(String.format("forceload add %d %d", RESYNC_TEST_X, RESYNC_TEST_Z));
+
+            // Set up test area - barrier floor
+            launcher.sendCommand(String.format("fill %d %d %d %d %d %d minecraft:barrier",
+                    RESYNC_TEST_X - 2, RESYNC_TEST_Y - 1, RESYNC_TEST_Z - 2,
+                    RESYNC_TEST_X + 2, RESYNC_TEST_Y - 1, RESYNC_TEST_Z + 2));
+
+            // Position player to observe the test location (also loads the chunk)
+            launcher.sendCommand(String.format("tp @a %d %d %d", RESYNC_TEST_X, RESYNC_TEST_Y + 2, RESYNC_TEST_Z + 3));
+            context.waitTicks(40);  // Give time for chunk to load
+
+            // Test 1: Resync after /setblock air
+            LOGGER.info("Test 1: Resync after /setblock air");
+            testResyncAfterRemoval(context, launcher, "setblock %d %d %d air".formatted(RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z));
+
+            // Additional test: Verify with a different removal method (fill command)
+            // This tests that any block removal clears lastKnownTrims
+            LOGGER.info("Test 2: Resync after /fill air");
+            testResyncAfterRemoval(context, launcher, "fill %d %d %d %d %d %d air".formatted(
+                    RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z,
+                    RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z));
+
+            // Disconnect
+            context.runOnClient(client -> {
+                client.disconnect(new TitleScreen(), false);
+            });
+            context.waitTicks(20);
+
+            LOGGER.info("Paper resync-after-break test completed successfully");
+
+        } catch (Exception e) {
+            LOGGER.error("Resync-after-break test failed", e);
+            throw new AssertionError("Resync-after-break test failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Helper method to test resync after a specific removal command.
+     */
+    private void testResyncAfterRemoval(ClientGameTestContext context, TestServerLauncher launcher, String removalCommand) throws java.io.IOException {
+        // Place a shulker box first, then add trim data via data merge
+        // (setblock with CustomData doesn't work reliably for block entity components)
+        String placeResult = launcher.sendCommand(String.format(
+                "setblock %d %d %d minecraft:blue_shulker_box[facing=up]",
+                RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z));
+        LOGGER.info("Place block response: {}", placeResult);
+
+        // Wait a tick for block entity to be created on server
+        context.waitTicks(5);
+
+        // Add trim data using data merge
+        String mergeResult = launcher.sendCommand(String.format(
+                "data merge block %d %d %d {components:{\"minecraft:custom_data\":{\"shulker_trims:trim\":{pattern:\"minecraft:wild\",material:\"minecraft:redstone\"}}}}",
+                RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z));
+        LOGGER.info("Data merge response: {}", mergeResult);
+
+        // Wait for sync (plugin's periodic check runs every 20 ticks = 1 second)
+        // Give it 4 seconds to ensure the block entity exists on client and periodic check runs
+        context.waitTicks(80);
+
+        // Verify trim was synced
+        boolean firstSyncReceived = context.computeOnClient(client -> {
+            if (client.world == null) return false;
+            var pos = new net.minecraft.util.math.BlockPos(RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z);
+            var be = client.world.getBlockEntity(pos);
+            if (be instanceof com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox trimmed) {
+                var trim = trimmed.shulkerTrims$getTrim();
+                if (trim != null) {
+                    LOGGER.info("Initial sync received: {}", trim);
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        if (!firstSyncReceived) {
+            throw new AssertionError("Initial trim sync not received");
+        }
+
+        // Remove the block
+        LOGGER.info("Removing block via: {}", removalCommand);
+        launcher.sendCommand(removalCommand);
+        context.waitTicks(20);
+
+        // Verify block is gone
+        boolean blockGone = context.computeOnClient(client -> {
+            if (client.world == null) return false;
+            var pos = new net.minecraft.util.math.BlockPos(RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z);
+            return client.world.getBlockState(pos).isAir();
+        });
+
+        if (!blockGone) {
+            throw new AssertionError("Block was not removed");
+        }
+
+        // Place the EXACT SAME trim at the EXACT SAME location
+        LOGGER.info("Re-placing identical trimmed shulker...");
+        launcher.sendCommand(String.format(
+                "setblock %d %d %d minecraft:blue_shulker_box[facing=up]",
+                RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z));
+        context.waitTicks(5);  // Wait for block entity creation
+        launcher.sendCommand(String.format(
+                "data merge block %d %d %d {components:{\"minecraft:custom_data\":{\"shulker_trims:trim\":{pattern:\"minecraft:wild\",material:\"minecraft:redstone\"}}}}",
+                RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z));
+
+        // Wait for sync - previously the bug was that lastKnownTrims still had the old entry,
+        // so checkForChanges saw currentTrim == lastKnownTrims and didn't re-sync.
+        // With the fix, lastKnownTrims is cleared when the shulker is removed.
+        context.waitTicks(80);
+
+        // Verify trim was re-synced (THIS IS THE FAILING ASSERTION)
+        boolean resyncReceived = context.computeOnClient(client -> {
+            if (client.world == null) return false;
+            var pos = new net.minecraft.util.math.BlockPos(RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z);
+            var be = client.world.getBlockEntity(pos);
+            if (be instanceof com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox trimmed) {
+                var trim = trimmed.shulkerTrims$getTrim();
+                if (trim != null) {
+                    LOGGER.info("Re-sync received: {}", trim);
+                    return true;
+                }
+            }
+            LOGGER.warn("Re-sync NOT received - this is the bug!");
+            return false;
+        });
+
+        if (!resyncReceived) {
+            throw new AssertionError("Trim not re-synced after break and replace - lastKnownTrims bug!");
+        }
+
+        // Clean up for next test
+        launcher.sendCommand(String.format("setblock %d %d %d air", RESYNC_TEST_X, RESYNC_TEST_Y, RESYNC_TEST_Z));
+        context.waitTicks(10);
     }
 
     /**

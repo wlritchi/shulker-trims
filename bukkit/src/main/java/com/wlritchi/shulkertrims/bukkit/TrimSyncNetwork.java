@@ -143,12 +143,22 @@ public class TrimSyncNetwork implements PluginMessageListener {
 
     /**
      * Check a chunk for shulker box trim changes and broadcast updates to nearby players.
+     * Also cleans up stale entries from lastKnownTrims when shulkers are removed.
      */
     private void checkChunkForChanges(Chunk chunk) {
+        String worldName = chunk.getWorld().getName();
+        int chunkX = chunk.getX();
+        int chunkZ = chunk.getZ();
+
+        // Track which locations in this chunk still have shulker boxes
+        var existingShulkerLocations = new java.util.HashSet<String>();
+
         for (BlockState state : chunk.getTileEntities()) {
             if (state instanceof ShulkerBox shulkerBox) {
                 Location loc = state.getLocation();
                 String key = getLocationKey(loc);
+                existingShulkerLocations.add(key);
+
                 ShulkerTrim currentTrim = ShulkerTrimStorage.readTrimFromBlock(shulkerBox);
                 ShulkerTrim lastTrim = lastKnownTrims.get(key);
 
@@ -166,6 +176,39 @@ public class TrimSyncNetwork implements PluginMessageListener {
                 }
             }
         }
+
+        // Clean up stale entries: remove lastKnownTrims entries for shulkers that no longer exist
+        // This handles cases like /setblock air, explosions, or pistons removing shulkers
+        lastKnownTrims.keySet().removeIf(key -> {
+            // Only check keys in this chunk's world
+            if (!key.startsWith(worldName + ":")) {
+                return false;
+            }
+
+            // Parse coordinates from key (format: "world:x:y:z")
+            String[] parts = key.split(":");
+            if (parts.length != 4) {
+                return false;
+            }
+
+            try {
+                int x = Integer.parseInt(parts[1]);
+                int z = Integer.parseInt(parts[3]);
+
+                // Check if this location is in the current chunk
+                int locChunkX = x >> 4;
+                int locChunkZ = z >> 4;
+
+                if (locChunkX == chunkX && locChunkZ == chunkZ) {
+                    // This key is in our chunk - remove it if no shulker exists there anymore
+                    return !existingShulkerLocations.contains(key);
+                }
+            } catch (NumberFormatException e) {
+                // Invalid key format - leave it alone
+            }
+
+            return false;
+        });
     }
 
     /**
