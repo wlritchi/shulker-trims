@@ -9,11 +9,16 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
+import net.minecraft.client.gl.Framebuffer;
+import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
 /**
@@ -130,5 +135,50 @@ public class IconGenerator implements FabricClientGameTest {
         config.setScaleX(2.5f);     // Zoom to frame shulker tightly
         config.setScaleY(2.5f);
         config.auto_third_person = false; // We'll handle camera mode ourselves
+    }
+
+    /**
+     * Captures screenshot and saves to output directory with transparent background.
+     */
+    private void captureIcon(ClientGameTestContext context, IconGenConfig config,
+                             String color, String pattern, String material) {
+        String filename = String.format("shulker-%s-%s-%s.png", color, pattern, material);
+        Path outputPath = config.getOutputDir().resolve(filename);
+
+        context.runOnClient(client -> {
+            try {
+                // Ensure output directory exists
+                Files.createDirectories(config.getOutputDir());
+
+                // Resize window to target size for clean capture
+                client.getWindow().setWindowedSize(config.getSize(), config.getSize());
+
+                // Wait a frame for resize to take effect
+            } catch (IOException e) {
+                LOGGER.error("Failed to create output directory", e);
+            }
+        });
+
+        context.waitTicks(5);
+
+        // Use Minecraft's screenshot mechanism with consumer callback
+        context.runOnClient(client -> {
+            Framebuffer framebuffer = client.getFramebuffer();
+
+            // Capture the framebuffer - newer API uses a consumer callback
+            ScreenshotRecorder.takeScreenshot(framebuffer, nativeImage -> {
+                try {
+                    // Save to file
+                    nativeImage.writeTo(outputPath);
+                    LOGGER.info("Saved icon: {}", outputPath);
+                } catch (IOException e) {
+                    LOGGER.error("Failed to save icon: {}", outputPath, e);
+                } finally {
+                    nativeImage.close();
+                }
+            });
+        });
+
+        context.waitTicks(2);
     }
 }
