@@ -271,3 +271,41 @@ afterEvaluate {
         }
     }
 }
+
+// Icon generation task - runs icongen source set as a client game test
+loom {
+    runs {
+        register("icongen") {
+            client()
+            name = "Generate Icons"
+            source(sourceSets.getByName("icongen"))
+            // Use the same configuration as client game tests
+            property("fabric-api.gametest")
+            property("fabric-api.gametest.client")
+        }
+    }
+}
+
+// Configure the icongen run task to pass through CLI arguments
+afterEvaluate {
+    tasks.named<JavaExec>("runIcongen") {
+        // Pass through shulker_trims.icongen.* system properties
+        System.getProperties().forEach { key, value ->
+            if (key.toString().startsWith("shulker_trims.icongen.")) {
+                jvmArgs("-D$key=$value")
+            }
+        }
+
+        // Set default output directory
+        val outputDir = project.layout.buildDirectory.dir("icons").get().asFile
+        jvmArgs("-Dshulker_trims.icongen.output=${outputDir.absolutePath}")
+    }
+}
+
+// Convenience task with clearer name
+tasks.register("generateIcon") {
+    group = "shulker trims"
+    description = "Generate isometric icon renders of trimmed shulker boxes"
+    dependsOn("runIcongen")
+}
+
