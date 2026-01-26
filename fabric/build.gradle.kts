@@ -228,6 +228,9 @@ afterEvaluate {
 
     // Configure client game tests
     tasks.named<JavaExec>("runClientGameTest") {
+        // Ensure Bukkit plugin is built for Paper server tests
+        dependsOn(":bukkit:build")
+
         // Disable network synchronization to allow external server connections
         jvmArgs("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
 
