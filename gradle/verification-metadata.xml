@@ -7,6 +7,7 @@
          <!-- Fabric Loom generates these artifacts locally by remapping to project mappings.
               They can't be verified against remote checksums. -->
          <trust group="remapped.net.fabricmc.fabric-api"/>
+         <trust group="remapped.maven.modrinth"/>
          <trust group="net.minecraft"/>
       </trusted-artifacts>
    </configuration>
