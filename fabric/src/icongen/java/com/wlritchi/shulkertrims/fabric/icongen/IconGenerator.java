@@ -63,8 +63,29 @@ public class IconGenerator implements FabricClientGameTest {
         LOGGER.info("Size: {}x{}", config.getSize(), config.getSize());
         LOGGER.info("Total combinations: {}", config.getTotalCombinations());
 
-        // TODO: Implement icon generation loop
-        LOGGER.info("Icon generation complete (skeleton - no icons generated yet)");
+        int generated = 0;
+
+        for (String color : config.getColors()) {
+            for (String pattern : config.getPatterns()) {
+                for (String material : config.getMaterials()) {
+                    LOGGER.info("Generating: color={}, pattern={}, material={}", color, pattern, material);
+
+                    try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
+                        singleplayer.getClientWorld().waitForChunksRender();
+
+                        setupScene(singleplayer, context, color, pattern, material);
+                        captureIcon(context, config, color, pattern, material);
+
+                        generated++;
+                    }
+
+                    // Disable OrthoCamera between generations to reset state
+                    OrthoCamera.CONFIG.enabled = false;
+                }
+            }
+        }
+
+        LOGGER.info("Icon generation complete: {} icons generated", generated);
     }
 
     /**
