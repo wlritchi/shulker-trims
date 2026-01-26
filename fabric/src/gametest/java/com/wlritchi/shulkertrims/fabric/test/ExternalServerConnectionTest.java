@@ -424,6 +424,7 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             // Set up both players via RCON
             try {
                 // Put observer in spectator mode at camera position
+                // Spectator mode prevents falling and doesn't require barriers
                 launcher.sendCommand("gamemode spectator " + observerName);
                 context.waitTicks(5);
                 String observerTp = TestWorldSetup.generateTwoPlayerObserverTeleportCommand(observerName);
@@ -446,32 +447,20 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                 String giveResp = launcher.sendCommand(giveItem);
                 LOGGER.info("Give item response: {}", giveResp);
 
-                // Verify bot has the item
-                String checkInventory = "data get entity " + bot.getUsername() + " Inventory";
-                String inventoryData = launcher.sendCommand(checkInventory);
-                LOGGER.info("Bot inventory: {}", inventoryData);
-
-                // Verify there's a solid block to place against (use stone instead of barrier for reliability)
+                // Verify there's a solid block to place against (use stone for reliability)
                 String setFloor = String.format("setblock %d %d %d minecraft:stone",
                         TestWorldSetup.TWO_PLAYER_BLOCK_X,
                         TestWorldSetup.TWO_PLAYER_BLOCK_Y - 1,
                         TestWorldSetup.TWO_PLAYER_BLOCK_Z);
                 String floorResp = launcher.sendCommand(setFloor);
                 LOGGER.info("Set floor block: {}", floorResp);
-
-                // Verify the block
-                String checkBlock = String.format("data get block %d %d %d",
-                        TestWorldSetup.TWO_PLAYER_BLOCK_X,
-                        TestWorldSetup.TWO_PLAYER_BLOCK_Y - 1,
-                        TestWorldSetup.TWO_PLAYER_BLOCK_Z);
-                String blockData = launcher.sendCommand(checkBlock);
-                LOGGER.info("Block at placement target: {}", blockData);
             } catch (Exception e) {
                 LOGGER.warn("RCON player setup failed: {}", e.getMessage());
             }
 
-            // Wait longer for teleports and item sync to bot client
-            context.waitTicks(60);
+            // Wait for teleports and item sync to bot client
+            // The bot needs time to receive and confirm teleport, then receive inventory update
+            context.waitTicks(80);
 
             // Hide HUD for clean screenshot
             context.runOnClient(client -> {
@@ -482,32 +471,29 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             LOGGER.info("Bot selecting hotbar slot 0...");
             bot.selectHotbarSlot(0);
 
-            // Send bot's position to server to confirm location after teleport
-            // Bot should be at (0.5, 100, -1.5) looking at the placement spot
-            // Calculate pitch to look down at block at Y=99 from Y=100
-            float yaw = 0;  // Looking south (toward Z=0 from Z=-2)
-            float pitch = 45;  // Looking down at the block
-            bot.sendPosition(
-                    TestWorldSetup.TWO_PLAYER_PLACER_X + 0.5,
-                    TestWorldSetup.TWO_PLAYER_PLACER_Y,
-                    TestWorldSetup.TWO_PLAYER_PLACER_Z + 0.5,
-                    yaw,
-                    pitch
-            );
+            // Wait for hotbar selection to sync
+            context.waitTicks(10);
 
-            // Wait for position and hotbar selection to sync
-            context.waitTicks(20);
+            // Check if bot received the item
+            if (!bot.hasItemInHotbar(0)) {
+                LOGGER.warn("Bot does not have item in hotbar slot 0 yet, waiting more...");
+                context.waitTicks(40);
+            }
+
+            // Log bot state before placement
+            var heldItem = bot.getHeldItem();
+            double[] botPos = bot.getPosition();
+            LOGGER.info("Bot state before placement:");
+            LOGGER.info("  Position: ({}, {}, {})", botPos[0], botPos[1], botPos[2]);
+            LOGGER.info("  Held item: {}", heldItem != null ? heldItem.getId() : "null");
 
             // Have bot place the block
-            // The block should be placed at (0, 100, 0)
-            // Note: MCProtocolLib block placement doesn't seem to work reliably with Paper
-            // So we use RCON to execute a setblock command as the bot player
+            // The block should be placed at (0, 100, 0) by clicking the top of the floor block at (0, 99, 0)
             LOGGER.info("Bot placing block at ({}, {}, {})...",
                     TestWorldSetup.TWO_PLAYER_BLOCK_X,
                     TestWorldSetup.TWO_PLAYER_BLOCK_Y,
                     TestWorldSetup.TWO_PLAYER_BLOCK_Z);
 
-            // First, try protocol-based placement
             org.cloudburstmc.math.vector.Vector3i targetBlock = org.cloudburstmc.math.vector.Vector3i.from(
                     TestWorldSetup.TWO_PLAYER_BLOCK_X,
                     TestWorldSetup.TWO_PLAYER_BLOCK_Y - 1,  // The floor block
@@ -515,8 +501,9 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             );
             bot.placeBlock(targetBlock, org.geysermc.mcprotocollib.protocol.data.game.entity.object.Direction.UP);
 
-            // Wait a bit to see if protocol placement worked
-            context.waitTicks(10);
+            // Wait for block placement and trim sync
+            LOGGER.info("Waiting for block placement and trim sync...");
+            context.waitTicks(40);
 
             // Check if block was placed
             boolean blockPlaced = context.computeOnClient(client -> {
@@ -531,36 +518,44 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             });
 
             if (!blockPlaced) {
-                LOGGER.warn("Protocol-based placement didn't work, using RCON fallback");
-                // Fallback: use RCON to execute /execute as bot to use item
-                // This simulates the bot placing from their held item
-                try {
-                    // Place the shulker box from the bot's inventory via execute
-                    String placeCommand = String.format(
-                            "execute as %s at @s run setblock %d %d %d minecraft:blue_shulker_box",
-                            bot.getUsername(),
-                            TestWorldSetup.TWO_PLAYER_BLOCK_X,
-                            TestWorldSetup.TWO_PLAYER_BLOCK_Y,
-                            TestWorldSetup.TWO_PLAYER_BLOCK_Z);
-                    String placeResp = launcher.sendCommand(placeCommand);
-                    LOGGER.info("RCON placement response: {}", placeResp);
+                // Log diagnostic information
+                LOGGER.error("Protocol-based block placement FAILED!");
+                LOGGER.error("This is a test infrastructure issue - the bot was unable to place a block");
+                LOGGER.error("Bot position: ({}, {}, {})", botPos[0], botPos[1], botPos[2]);
+                LOGGER.error("Bot held item: {}", heldItem != null ? heldItem.getId() : "null");
+                LOGGER.error("Target block: ({}, {}, {}) face UP",
+                        TestWorldSetup.TWO_PLAYER_BLOCK_X,
+                        TestWorldSetup.TWO_PLAYER_BLOCK_Y - 1,
+                        TestWorldSetup.TWO_PLAYER_BLOCK_Z);
 
-                    // Now apply the trim data to the placed block
-                    String trimCommand = String.format(
-                            "data merge block %d %d %d {components:{\"minecraft:custom_data\":{\"shulker_trims:trim\":{pattern:\"minecraft:wild\",material:\"minecraft:redstone\"}}}}",
-                            TestWorldSetup.TWO_PLAYER_BLOCK_X,
-                            TestWorldSetup.TWO_PLAYER_BLOCK_Y,
-                            TestWorldSetup.TWO_PLAYER_BLOCK_Z);
-                    String trimResp = launcher.sendCommand(trimCommand);
-                    LOGGER.info("RCON trim response: {}", trimResp);
-                } catch (Exception e) {
-                    LOGGER.error("RCON fallback placement failed", e);
-                }
+                // Check what block is at the target
+                context.runOnClient(client -> {
+                    if (client.world != null) {
+                        var floorPos = new net.minecraft.util.math.BlockPos(
+                                TestWorldSetup.TWO_PLAYER_BLOCK_X,
+                                TestWorldSetup.TWO_PLAYER_BLOCK_Y - 1,
+                                TestWorldSetup.TWO_PLAYER_BLOCK_Z);
+                        var placementPos = new net.minecraft.util.math.BlockPos(
+                                TestWorldSetup.TWO_PLAYER_BLOCK_X,
+                                TestWorldSetup.TWO_PLAYER_BLOCK_Y,
+                                TestWorldSetup.TWO_PLAYER_BLOCK_Z);
+                        LOGGER.error("Floor block at Y-1: {}",
+                                net.minecraft.registry.Registries.BLOCK.getId(
+                                        client.world.getBlockState(floorPos).getBlock()));
+                        LOGGER.error("Block at placement position: {}",
+                                net.minecraft.registry.Registries.BLOCK.getId(
+                                        client.world.getBlockState(placementPos).getBlock()));
+                    }
+                });
+
+                throw new AssertionError(
+                        "Protocol-based block placement failed. " +
+                        "The MCProtocolLib bot was unable to place a block via ServerboundUseItemOnPacket. " +
+                        "Check logs for diagnostic information.");
             }
 
-            // Wait for block placement and trim sync
-            LOGGER.info("Waiting for block placement and trim sync...");
-            context.waitTicks(40);
+            LOGGER.info("Block placement via protocol SUCCEEDED!");
+            context.waitTicks(20);
 
             // Verify the block was placed (from observer's perspective)
             context.runOnClient(client -> {
@@ -863,46 +858,20 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
         );
 
         // Teleport to chest position
+        // The chest setup places barrier floors, so player won't fall
         String teleportCommand = TestWorldSetup.generateGuiTeleportCommand(
                 playerName, TestWorldSetup.CHEST_X, TestWorldSetup.CHEST_Y, TestWorldSetup.CHEST_Z);
         LOGGER.info("Teleport command: {}", teleportCommand);
 
         try {
-            // Set creative mode and spectator briefly to stop falling
-            launcher.sendCommand("gamemode spectator " + playerName);
-            context.waitTicks(10);
-
-            // Teleport while in spectator mode (won't fall)
-            String tpResp = launcher.sendCommand(teleportCommand);
-            LOGGER.info("Teleport response: {}", tpResp);
-            context.waitTicks(40);
-
-            // Switch back to creative
             launcher.sendCommand("gamemode creative " + playerName);
-            context.waitTicks(20);
-
-            // Verify position
-            Double playerY = context.computeOnClient(client ->
-                client.player != null ? client.player.getY() : null
-            );
-            LOGGER.info("Player Y after teleport: {}", playerY);
-
-            // If still not at correct position, retry
-            if (playerY == null || Math.abs(playerY - TestWorldSetup.CHEST_Y) > 5) {
-                LOGGER.warn("Player not at target position, retrying teleport");
-                launcher.sendCommand("gamemode spectator " + playerName);
-                context.waitTicks(10);
-                launcher.sendCommand(teleportCommand);
-                context.waitTicks(40);
-                launcher.sendCommand("gamemode creative " + playerName);
-                context.waitTicks(20);
-            }
+            launcher.sendCommand(teleportCommand);
         } catch (Exception e) {
             LOGGER.warn("Failed during teleport: {}", e.getMessage());
         }
 
-        // Final wait for chunks to render
-        context.waitTicks(40);
+        // Wait for teleport and chunks to render
+        context.waitTicks(60);
 
         // Log final player position
         context.runOnClient(client -> {
@@ -1204,28 +1173,19 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
         );
 
         // Teleport to camera position to view dispenser output area
-        // Use spectator mode during teleport to prevent falling
+        // This is an observation test - use spectator mode (no falling, no barriers needed)
         try {
             String teleportCommand = TestWorldSetup.generateDispenserTeleportCommand(playerName);
             LOGGER.info("Teleport command: {}", teleportCommand);
 
-            // Use spectator mode to prevent falling during teleport
             launcher.sendCommand("gamemode spectator " + playerName);
-            context.waitTicks(10);
-
-            // Teleport while in spectator mode
             launcher.sendCommand(teleportCommand);
-            context.waitTicks(40);
-
-            // Switch to creative mode
-            launcher.sendCommand("gamemode creative " + playerName);
-            context.waitTicks(20);
         } catch (Exception e) {
             LOGGER.warn("Failed to teleport player: {}", e.getMessage());
         }
 
-        // Wait for chunks to render at camera position
-        context.waitTicks(40);
+        // Wait for teleport and chunks to render at camera position
+        context.waitTicks(60);
 
         // Hide HUD for clean screenshots
         context.runOnClient(client -> {
