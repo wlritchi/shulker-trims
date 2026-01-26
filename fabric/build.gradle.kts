@@ -174,7 +174,12 @@ dependencies {
 
     // MCProtocolLib for bot client in two-player tests
     // Using 1.21.9-SNAPSHOT (protocol-compatible with MC 1.21.10)
-    "gametestImplementation"("org.geysermc.mcprotocollib:protocol:1.21.9-SNAPSHOT")
+    // Exclude netty-all to avoid version conflict with Minecraft's bundled netty 4.1.x
+    // MCProtocolLib 1.21.9 pulls netty 4.2.1 which has incompatible IoHandler changes
+    // that break LocalServerChannel used by the integrated server
+    "gametestImplementation"("org.geysermc.mcprotocollib:protocol:1.21.9-SNAPSHOT") {
+        exclude(group = "io.netty")
+    }
 }
 
 // Reproducible SNAPSHOT dependency resolution (same pattern as bukkit module):

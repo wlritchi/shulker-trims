@@ -394,15 +394,17 @@ public final class TestWorldSetup {
 
     // Two-player placement test constants
     // Tests that a shulker box placed by one player syncs trims to another player's client
-    public static final int TWO_PLAYER_BLOCK_X = 0;
+    // Uses X=20 to avoid coordinate conflicts with dispenser test at (0, 100, 0)
+    // This prevents stale lastKnownTrims state from causing sync detection issues
+    public static final int TWO_PLAYER_BLOCK_X = 20;
     public static final int TWO_PLAYER_BLOCK_Y = 100;
     public static final int TWO_PLAYER_BLOCK_Z = 0;
     // Position for the player who places the block (north of the placement spot)
-    public static final int TWO_PLAYER_PLACER_X = 0;
+    public static final int TWO_PLAYER_PLACER_X = 20;
     public static final int TWO_PLAYER_PLACER_Y = 100;
     public static final int TWO_PLAYER_PLACER_Z = -2;
     // Position for the observer player (south of the block, looking north)
-    public static final int TWO_PLAYER_OBSERVER_X = 0;
+    public static final int TWO_PLAYER_OBSERVER_X = 20;
     public static final int TWO_PLAYER_OBSERVER_Y = 102;
     public static final int TWO_PLAYER_OBSERVER_Z = 3;
     public static final float TWO_PLAYER_OBSERVER_YAW = 180.0f;  // Looking north

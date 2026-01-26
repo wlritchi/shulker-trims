@@ -564,9 +564,14 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             } catch (Exception e) {
                 LOGGER.warn("Failed to teleport bot out of frame: {}", e.getMessage());
             }
-            context.waitTicks(20);
 
-            // Verify the block was placed (from observer's perspective)
+            // Wait for block placement to propagate and trim to sync.
+            // The plugin's periodic sync runs every second, and the trim needs to
+            // propagate to the observer client.
+            LOGGER.info("Waiting for block placement to propagate...");
+            context.waitTicks(60);  // 3 seconds
+
+            // Verify the block and trim
             context.runOnClient(client -> {
                 if (client.world != null) {
                     var blockPos = new net.minecraft.util.math.BlockPos(
@@ -579,6 +584,16 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
 
                     if (block instanceof net.minecraft.block.ShulkerBoxBlock) {
                         LOGGER.info("Shulker box placed successfully!");
+                        var blockEntity = client.world.getBlockEntity(blockPos);
+                        if (blockEntity instanceof com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox trimmed) {
+                            var trim = trimmed.shulkerTrims$getTrim();
+                            if (trim != null) {
+                                LOGGER.info("Trim present in block entity: pattern={}, material={}",
+                                        trim.pattern(), trim.material());
+                            } else {
+                                LOGGER.warn("NO TRIM in block entity after waiting!");
+                            }
+                        }
                     } else {
                         LOGGER.warn("Expected shulker box but found: {}", block);
                     }
