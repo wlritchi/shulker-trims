@@ -150,6 +150,25 @@ fabricApi {
     }
 }
 
+// Icon generation source set - separate from tests to isolate OrthoCamera dependency
+sourceSets {
+    create("icongen") {
+        compileClasspath += sourceSets.main.get().compileClasspath + sourceSets.main.get().output
+        runtimeClasspath += sourceSets.main.get().runtimeClasspath + sourceSets.main.get().output
+        // Also need client classes for rendering
+        compileClasspath += sourceSets.getByName("client").compileClasspath + sourceSets.getByName("client").output
+        runtimeClasspath += sourceSets.getByName("client").runtimeClasspath + sourceSets.getByName("client").output
+    }
+}
+
+// Create modIcongenImplementation and related configurations that remap mods
+loom.createRemapConfigurations(sourceSets.getByName("icongen"))
+
+// OrthoCamera for isometric icon generation (isolated to icongen source set)
+dependencies {
+    "modIcongenImplementation"("maven.modrinth:orthocamera:0.1.10+1.21.9")
+}
+
 // Note: For headless client game tests on Linux, use:
 //   xvfb-run -a ./gradlew :fabric:runClientGameTest
 // This ensures consistent rendering between local and CI environments.
@@ -161,6 +180,12 @@ repositories {
     }
     maven("https://repo.opencollab.dev/maven-snapshots/") {
         name = "opencollab-snapshots"
+    }
+    maven("https://api.modrinth.com/maven") {
+        name = "Modrinth"
+        content {
+            includeGroup("maven.modrinth")
+        }
     }
 }
 
@@ -180,6 +205,7 @@ dependencies {
     "gametestImplementation"("org.geysermc.mcprotocollib:protocol:1.21.9-SNAPSHOT") {
         exclude(group = "io.netty")
     }
+
 }
 
 // Reproducible SNAPSHOT dependency resolution (same pattern as bukkit module):
