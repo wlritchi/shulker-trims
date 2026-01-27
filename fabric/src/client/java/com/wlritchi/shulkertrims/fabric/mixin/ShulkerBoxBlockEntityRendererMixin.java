@@ -3,6 +3,7 @@ package com.wlritchi.shulkertrims.fabric.mixin;
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
 import com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod;
 import com.wlritchi.shulkertrims.fabric.TrimmedShulkerBox;
+import com.wlritchi.shulkertrims.fabric.client.OrthographicTrimRenderLayer;
 import com.wlritchi.shulkertrims.fabric.client.ShulkerTrimRenderer;
 import com.wlritchi.shulkertrims.fabric.client.TrimmedShulkerRenderState;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
@@ -136,8 +137,9 @@ public abstract class ShulkerBoxBlockEntityRendererMixin {
             }
 
             // Use the armor trims render layer - the shulker model's getRenderLayer function
-            // returns a layer for shulker_boxes atlas, but our sprites are in armor_trims atlas
-            RenderLayer renderLayer = TexturedRenderLayers.getArmorTrims(false);
+            // returns a layer for shulker_boxes atlas, but our sprites are in armor_trims atlas.
+            // OrthographicTrimRenderLayer handles the Z-offset direction bug in orthographic mode.
+            RenderLayer renderLayer = OrthographicTrimRenderLayer.getArmorTrims();
 
             // Apply transforms and render
             matrices.push();
