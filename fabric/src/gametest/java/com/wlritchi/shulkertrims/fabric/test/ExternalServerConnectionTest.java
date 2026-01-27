@@ -122,6 +122,7 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
     /**
      * Run all enabled Paper tests with a shared server instance.
      * This avoids the ~30s Paper startup overhead for each test.
+     * Results are reported to {@link TestResultCollector} for final summary.
      */
     private void runPaperTests(ClientGameTestContext context) {
         Set<String> enabledTests = getEnabledPaperTests();
@@ -141,18 +142,14 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
             String address = launcher.getAddress();
             LOGGER.info("Paper server started at {}", address);
 
-            // Run each enabled test
-            int passed = 0;
-            int failed = 0;
-
+            // Run each enabled test, reporting results to TestResultCollector
             if (enabledTests.contains(TEST_WORLD)) {
                 cleanupWorldViaRcon(launcher);
                 try {
                     runPaperWorldTest(context, address, launcher);
-                    passed++;
+                    TestResultCollector.recordPassed("Paper: World rendering");
                 } catch (Exception | AssertionError e) {
-                    LOGGER.error("Paper world test FAILED", e);
-                    failed++;
+                    TestResultCollector.recordFailed("Paper: World rendering", e);
                 }
             }
 
@@ -160,10 +157,9 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                 cleanupWorldViaRcon(launcher);
                 try {
                     runPaperChunkReloadTest(context, address, launcher);
-                    passed++;
+                    TestResultCollector.recordPassed("Paper: Chunk reload sync");
                 } catch (Exception | AssertionError e) {
-                    LOGGER.error("Paper chunk reload test FAILED", e);
-                    failed++;
+                    TestResultCollector.recordFailed("Paper: Chunk reload sync", e);
                 }
             }
 
@@ -171,10 +167,9 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                 cleanupWorldViaRcon(launcher);
                 try {
                     runPaperLiveModificationTest(context, address, launcher);
-                    passed++;
+                    TestResultCollector.recordPassed("Paper: Live modification");
                 } catch (Exception | AssertionError e) {
-                    LOGGER.error("Paper live modification test FAILED", e);
-                    failed++;
+                    TestResultCollector.recordFailed("Paper: Live modification", e);
                 }
             }
 
@@ -182,10 +177,9 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                 cleanupWorldViaRcon(launcher);
                 try {
                     runPaperChestGuiTest(context, address, launcher);
-                    passed++;
+                    TestResultCollector.recordPassed("Paper: Chest GUI rendering");
                 } catch (Exception | AssertionError e) {
-                    LOGGER.error("Paper chest GUI test FAILED", e);
-                    failed++;
+                    TestResultCollector.recordFailed("Paper: Chest GUI rendering", e);
                 }
             }
 
@@ -193,10 +187,9 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                 cleanupWorldViaRcon(launcher);
                 try {
                     runPaperSmithingTableTest(context, address, launcher);
-                    passed++;
+                    TestResultCollector.recordPassed("Paper: Smithing table preview");
                 } catch (Exception | AssertionError e) {
-                    LOGGER.error("Paper smithing table test FAILED", e);
-                    failed++;
+                    TestResultCollector.recordFailed("Paper: Smithing table preview", e);
                 }
             }
 
@@ -204,10 +197,9 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                 cleanupWorldViaRcon(launcher);
                 try {
                     runPaperDispenserPlacementTest(context, address, launcher);
-                    passed++;
+                    TestResultCollector.recordPassed("Paper: Dispenser placement");
                 } catch (Exception | AssertionError e) {
-                    LOGGER.error("Paper dispenser placement test FAILED", e);
-                    failed++;
+                    TestResultCollector.recordFailed("Paper: Dispenser placement", e);
                 }
             }
 
@@ -215,10 +207,9 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                 cleanupWorldViaRcon(launcher);
                 try {
                     runPaperTwoPlayerPlacementTest(context, address, launcher);
-                    passed++;
+                    TestResultCollector.recordPassed("Paper: Two-player placement");
                 } catch (Exception | AssertionError e) {
-                    LOGGER.error("Paper two-player placement test FAILED", e);
-                    failed++;
+                    TestResultCollector.recordFailed("Paper: Two-player placement", e);
                 }
             }
 
@@ -226,22 +217,17 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
                 cleanupWorldViaRcon(launcher);
                 try {
                     runPaperResyncAfterBreakTest(context, address, launcher);
-                    passed++;
+                    TestResultCollector.recordPassed("Paper: Resync after break");
                 } catch (Exception | AssertionError e) {
-                    LOGGER.error("Paper resync-after-break test FAILED", e);
-                    failed++;
+                    TestResultCollector.recordFailed("Paper: Resync after break", e);
                 }
             }
 
-            LOGGER.info("=== Paper Tests Complete: {} passed, {} failed ===", passed, failed);
-
-            if (failed > 0) {
-                throw new AssertionError(failed + " Paper test(s) failed");
-            }
+            LOGGER.info("Paper tests complete (results collected for final summary)");
 
         } catch (Exception e) {
             LOGGER.error("Paper server setup failed", e);
-            throw new AssertionError("Paper server setup failed: " + e.getMessage(), e);
+            TestResultCollector.recordFailed("Paper: Server setup", e);
         }
     }
 

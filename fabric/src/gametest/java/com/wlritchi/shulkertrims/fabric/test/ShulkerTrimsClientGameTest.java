@@ -144,21 +144,41 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
-        LOGGER.info("Starting Shulker Trims client game tests");
+        LOGGER.info("Starting Shulker Trims singleplayer client game tests");
 
         // Test 1: Untrimmed world baseline - creates golden template for comparison
-        testUntrimmedWorldRendering(context);
+        try {
+            testUntrimmedWorldRendering(context);
+            TestResultCollector.recordPassed("Singleplayer: Untrimmed world rendering");
+        } catch (Exception | AssertionError e) {
+            TestResultCollector.recordFailed("Singleplayer: Untrimmed world rendering", e);
+        }
 
         // Test 2: Comprehensive world rendering - all patterns, colors, and materials
-        testComprehensiveWorldRendering(context);
+        try {
+            testComprehensiveWorldRendering(context);
+            TestResultCollector.recordPassed("Singleplayer: Comprehensive world rendering");
+        } catch (Exception | AssertionError e) {
+            TestResultCollector.recordFailed("Singleplayer: Comprehensive world rendering", e);
+        }
 
         // Test 3: Comprehensive inventory rendering - all patterns, colors, and materials
-        testComprehensiveInventoryRendering(context);
+        try {
+            testComprehensiveInventoryRendering(context);
+            TestResultCollector.recordPassed("Singleplayer: Comprehensive inventory rendering");
+        } catch (Exception | AssertionError e) {
+            TestResultCollector.recordFailed("Singleplayer: Comprehensive inventory rendering", e);
+        }
 
         // Test 4: Smithing table GUI with trim preview
-        testSmithingTablePreview(context);
+        try {
+            testSmithingTablePreview(context);
+            TestResultCollector.recordPassed("Singleplayer: Smithing table preview");
+        } catch (Exception | AssertionError e) {
+            TestResultCollector.recordFailed("Singleplayer: Smithing table preview", e);
+        }
 
-        LOGGER.info("Shulker Trims client game tests completed successfully");
+        LOGGER.info("Singleplayer tests complete (results collected for final summary)");
     }
 
     /**
