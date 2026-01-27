@@ -10,6 +10,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.client.gl.Framebuffer;
+import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -93,7 +94,7 @@ public class IconGenerator implements FabricClientGameTest {
      */
     private void setupScene(TestSingleplayerContext singleplayer, ClientGameTestContext context,
                            String color, String pattern, String material) {
-        BlockPos shulkerPos = new BlockPos(0, 100, 0);
+        BlockPos shulkerPos = new BlockPos(0, 101, 0);
 
         // Place the shulker box with trim
         singleplayer.getServer().runOnServer(server -> {
@@ -131,8 +132,8 @@ public class IconGenerator implements FabricClientGameTest {
         // Position player at the shulker, with isometric rotation
         // In OrthoCamera non-fixed mode, the player's rotation determines view direction
         // Yaw 225 (looking southwest), pitch 35 (steeper downward)
-        // Fine-tuned position for centered framing
-        singleplayer.getServer().runCommand("tp @p 0.5 100.3 0.5 225 35");
+        // Fine-tuned position for centered framing (camera at Y=99.8, half block below original)
+        singleplayer.getServer().runCommand("tp @p 0.5 99.9 0.5 225 35");
         context.waitTicks(10);
 
         // Hide HUD for clean capture
@@ -151,9 +152,8 @@ public class IconGenerator implements FabricClientGameTest {
         config.fixed = false;  // Don't fix - use player's actual rotation
         // Scale determines zoom level in orthographic mode
         // Lower scale = more zoomed in
-        // Scale 1.2 gives some margin around shulker for centering
-        config.setScaleX(1.2f);
-        config.setScaleY(1.2f);
+        config.setScaleX(0.9f);
+        config.setScaleY(0.9f);
         config.auto_third_person = false;
     }
 
@@ -188,6 +188,9 @@ public class IconGenerator implements FabricClientGameTest {
             // Capture the framebuffer - newer API uses a consumer callback
             ScreenshotRecorder.takeScreenshot(framebuffer, nativeImage -> {
                 try {
+                    // Apply chroma key to make sky transparent
+                    chromaKeyBackground(nativeImage);
+
                     // Save to file
                     nativeImage.writeTo(outputPath);
                     LOGGER.info("Saved icon: {}", outputPath);
@@ -200,5 +203,51 @@ public class IconGenerator implements FabricClientGameTest {
         });
 
         context.waitTicks(2);
+    }
+
+    /**
+     * Replaces sky-colored pixels with transparent pixels.
+     * Uses the top-left corner pixel as the reference sky color.
+     */
+    private void chromaKeyBackground(NativeImage image) {
+        // Sample the sky color from the corner (should be pure sky)
+        int skyColor = image.getColorArgb(0, 0);
+
+        // Extract ARGB components
+        int skyA = (skyColor >> 24) & 0xFF;
+        int skyR = (skyColor >> 16) & 0xFF;
+        int skyG = (skyColor >> 8) & 0xFF;
+        int skyB = skyColor & 0xFF;
+
+        // Tolerance for color matching (sky has slight gradients)
+        int tolerance = 30;
+
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int replaced = 0;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixel = image.getColorArgb(x, y);
+
+                int a = (pixel >> 24) & 0xFF;
+                int r = (pixel >> 16) & 0xFF;
+                int g = (pixel >> 8) & 0xFF;
+                int b = pixel & 0xFF;
+
+                // Check if pixel is close to sky color
+                if (Math.abs(r - skyR) <= tolerance &&
+                        Math.abs(g - skyG) <= tolerance &&
+                        Math.abs(b - skyB) <= tolerance &&
+                        a > 200) { // Only replace opaque pixels
+                    // Set to fully transparent (ARGB format)
+                    image.setColorArgb(x, y, 0x00000000);
+                    replaced++;
+                }
+            }
+        }
+
+        LOGGER.info("Chroma key: replaced {} sky pixels (reference color: R={}, G={}, B={})",
+                replaced, skyR, skyG, skyB);
     }
 }

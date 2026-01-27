@@ -20,7 +20,7 @@ public class IconGenConfig {
 
     public IconGenConfig() {
         this.colors = parseList("color", "purple");
-        this.patterns = parseList("pattern", "sentry");
+        this.patterns = parseList("pattern", "dune");
         this.materials = parseList("material", "gold");
         this.outputDir = Paths.get(System.getProperty(PREFIX + "output", "build/icons"));
         this.size = Integer.parseInt(System.getProperty(PREFIX + "size", "512"));
