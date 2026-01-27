@@ -279,9 +279,10 @@ loom {
             client()
             name = "Generate Icons"
             source(sourceSets.getByName("icongen"))
-            // Use the same configuration as client game tests
-            property("fabric-api.gametest")
-            property("fabric-api.gametest.client")
+            // Enable client game tests - the correct property is fabric.client.gametest
+            vmArg("-Dfabric.client.gametest")
+            // Disable network synchronizer to avoid crashes with custom network operations
+            vmArg("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
         }
     }
 }

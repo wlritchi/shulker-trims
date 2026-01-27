@@ -121,20 +121,18 @@ public class IconGenerator implements FabricClientGameTest {
         singleplayer.getServer().runCommand("gamerule doDaylightCycle false");
         context.waitTicks(5);
 
-        // Configure OrthoCamera for isometric view
+        // Put player in spectator mode to prevent falling
+        singleplayer.getServer().runCommand("gamemode spectator @p");
+        context.waitTicks(5);
+
+        // Configure OrthoCamera for isometric view BEFORE positioning camera
         configureOrthoCamera();
 
-        // Position player/camera for isometric view
-        // Camera looks at shulker from front-right, 45° yaw, 30° pitch
-        float yaw = 225f;  // Looking toward -X, -Z (southwest in MC terms)
-        float pitch = 30f; // Slight downward angle
-        int cameraX = 3;
-        int cameraY = 102;
-        int cameraZ = 3;
-
-        singleplayer.getServer().runCommand(
-                String.format("tp @p %d %d %d %.1f %.1f", cameraX, cameraY, cameraZ, yaw, pitch)
-        );
+        // Position player at the shulker, with isometric rotation
+        // In OrthoCamera non-fixed mode, the player's rotation determines view direction
+        // Yaw 225 (looking southwest), pitch 35 (steeper downward)
+        // Fine-tuned position for centered framing
+        singleplayer.getServer().runCommand("tp @p 0.5 100.3 0.5 225 35");
         context.waitTicks(10);
 
         // Hide HUD for clean capture
@@ -150,12 +148,13 @@ public class IconGenerator implements FabricClientGameTest {
     private void configureOrthoCamera() {
         var config = OrthoCamera.CONFIG;
         config.enabled = true;
-        config.fixed = true;
-        config.setFixedYaw(225f);   // Match camera yaw
-        config.setFixedPitch(30f);  // Match camera pitch
-        config.setScaleX(2.5f);     // Zoom to frame shulker tightly
-        config.setScaleY(2.5f);
-        config.auto_third_person = false; // We'll handle camera mode ourselves
+        config.fixed = false;  // Don't fix - use player's actual rotation
+        // Scale determines zoom level in orthographic mode
+        // Lower scale = more zoomed in
+        // Scale 1.2 gives some margin around shulker for centering
+        config.setScaleX(1.2f);
+        config.setScaleY(1.2f);
+        config.auto_third_person = false;
     }
 
     /**
