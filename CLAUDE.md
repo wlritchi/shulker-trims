@@ -146,3 +146,49 @@ Run locally:
 - The Paper runtime test only verifies plugin initialization, not gameplay mechanics
 - NMS code compatibility is version-specific; the test catches reflection/method errors on startup
 - Server startup takes ~20-30 seconds including world generation
+
+## Icon Generation
+
+The `icongen` source set generates isometric PNG renders of trimmed shulker boxes for use as project icons (Modrinth, mod menu, etc.).
+
+### Running
+
+```bash
+# Generate icons (requires XVFB on Linux for headless rendering)
+xvfb-run -a ./gradlew :fabric:generateIcon
+
+# With custom parameters
+xvfb-run -a ./gradlew :fabric:generateIcon \
+  -Dshulker_trims.icongen.colors=purple,cyan \
+  -Dshulker_trims.icongen.patterns=sentry,wild \
+  -Dshulker_trims.icongen.materials=gold,diamond
+```
+
+### Configuration
+
+System properties (all optional):
+- `shulker_trims.icongen.colors` - Comma-separated shulker colors (default: `purple`)
+- `shulker_trims.icongen.patterns` - Comma-separated trim patterns (default: `sentry`)
+- `shulker_trims.icongen.materials` - Comma-separated trim materials (default: `gold`)
+- `shulker_trims.icongen.size` - Output image size in pixels (default: `512`)
+- `shulker_trims.icongen.output` - Output directory (default: `fabric/build/icons`)
+
+Multiple values for colors/patterns/materials generates the Cartesian product of all combinations.
+
+### Output
+
+Icons are saved to `fabric/build/icons/` with naming pattern:
+```
+shulker-{color}-{pattern}-{material}.png
+```
+
+Example: `shulker-purple-sentry-gold.png`
+
+### Implementation
+
+The icon generator uses:
+- [OrthoCamera](https://modrinth.com/mod/orthocamera) mod for orthographic projection
+- Fabric Client GameTest API for automated Minecraft client control
+- Custom `icongen` source set to isolate OrthoCamera dependency from main tests
+
+The generator creates a singleplayer world, places a trimmed shulker box, configures the orthographic camera at an isometric angle, captures a screenshot, and resizes to the target dimensions.
