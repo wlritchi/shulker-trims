@@ -94,6 +94,11 @@ public final class OrthographicTrimRenderLayer extends RenderPhase {
     /**
      * Returns the appropriate render layer for trim overlays based on current projection type.
      *
+     * <p>This method is only intended for <strong>block entity rendering</strong> (placed shulker
+     * boxes in the world). For <strong>item rendering</strong> (GUI, armor stand previews, held
+     * items), use {@link TexturedRenderLayers#getArmorTrims(boolean)} directly, as vanilla's
+     * layer works correctly for all item rendering contexts.
+     *
      * @return render layer that works correctly for the current projection mode
      */
     public static RenderLayer getArmorTrims() {

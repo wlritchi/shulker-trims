@@ -3,7 +3,6 @@ package com.wlritchi.shulkertrims.fabric.mixin;
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
 import com.wlritchi.shulkertrims.fabric.ShulkerTrimsMod;
 import com.wlritchi.shulkertrims.fabric.client.ItemTrimRenderContext;
-import com.wlritchi.shulkertrims.fabric.client.OrthographicTrimRenderLayer;
 import com.wlritchi.shulkertrims.fabric.client.ShulkerTrimRenderer;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.model.Model;
@@ -135,9 +134,11 @@ public class ShulkerBoxModelRendererMixin {
                 return;
             }
 
-            // Use armor trims render layer for correct palette swapping.
-            // OrthographicTrimRenderLayer handles the Z-offset direction bug in orthographic mode.
-            RenderLayer renderLayer = OrthographicTrimRenderLayer.getArmorTrims();
+            // Use vanilla armor trims render layer for correct palette swapping.
+            // Note: OrthographicTrimRenderLayer is only needed for placed block rendering with
+            // OrthoCamera mod. Item rendering (GUI, armor stand previews, held items) works
+            // correctly with vanilla's layer even in orthographic projection.
+            RenderLayer renderLayer = TexturedRenderLayers.getArmorTrims(false);
 
             // The vanilla render method already applied transforms and popped the matrix.
             // We need to apply our own transforms from scratch.

@@ -58,9 +58,10 @@ public class ExternalServerConnectionTest implements FabricClientGameTest {
     // Port for test servers (different from default 25565 to avoid conflicts)
     private static final int TEST_SERVER_PORT = 25566;
 
-    // Screenshot comparison threshold (0.01% mean squared difference)
-    // Same as singleplayer tests for consistency
-    private static final float COMPARISON_THRESHOLD = 0.0001f;
+    // Screenshot comparison threshold (0.001% mean squared difference)
+    // Strict enough to catch single-texture changes like missing trim overlays
+    // while allowing for negligible floating-point rendering differences.
+    private static final float COMPARISON_THRESHOLD = 0.00001f;
 
     // For manual testing with an already-running server
     private static final String MANUAL_SERVER_ADDRESS = "127.0.0.1:25565";

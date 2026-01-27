@@ -137,10 +137,10 @@ public class ShulkerTrimsClientGameTest implements FabricClientGameTest {
 
     /**
      * Mean Squared Difference threshold for screenshot comparison.
-     * 0.0001 (0.01%) is strict enough to catch single-texture changes
+     * 0.00001 (0.001%) is strict enough to catch single-texture changes like missing trim overlays
      * while allowing for negligible floating-point rendering differences.
      */
-    private static final float COMPARISON_THRESHOLD = 0.0001f;
+    private static final float COMPARISON_THRESHOLD = 0.00001f;
 
     @Override
     public void runTest(ClientGameTestContext context) {
