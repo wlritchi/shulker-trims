@@ -40,30 +40,32 @@ public class GalleryGenerator implements FabricClientGameTest {
   /** The 6 curated shulker boxes for the gallery. */
   private static final List<ShulkerPlacement> SHULKERS =
       List.of(
+          // On shelf (y=3 is on top of slab at y=2, z=2)
           new ShulkerPlacement(
-              Blocks.PURPLE_SHULKER_BOX, "sentry", "gold", ROOM_ORIGIN.add(1, 1, 3), Direction.UP),
+              Blocks.PURPLE_SHULKER_BOX, "sentry", "gold", ROOM_ORIGIN.add(0, 3, 2), Direction.UP),
           new ShulkerPlacement(
-              Blocks.CYAN_SHULKER_BOX, "wild", "copper", ROOM_ORIGIN.add(3, 1, 3), Direction.UP),
+              Blocks.CYAN_SHULKER_BOX, "wild", "copper", ROOM_ORIGIN.add(2, 3, 2), Direction.UP),
           new ShulkerPlacement(
               Blocks.WHITE_SHULKER_BOX,
               "dune",
               "netherite",
-              ROOM_ORIGIN.add(0, 1, 1),
+              ROOM_ORIGIN.add(4, 3, 2),
               Direction.UP),
+          // On floor (y=1, spread out in staggered pattern)
           new ShulkerPlacement(
               Blocks.ORANGE_SHULKER_BOX,
               "coast",
               "diamond",
-              ROOM_ORIGIN.add(2, 1, 1),
-              Direction.SOUTH),
+              ROOM_ORIGIN.add(0, 1, 1),
+              Direction.SOUTH), // On side, facing camera
           new ShulkerPlacement(
               Blocks.LIGHT_GRAY_SHULKER_BOX,
               "vex",
               "amethyst",
-              ROOM_ORIGIN.add(4, 1, 2),
+              ROOM_ORIGIN.add(2, 1, 0),
               Direction.UP),
           new ShulkerPlacement(
-              Blocks.BLACK_SHULKER_BOX, "rib", "gold", ROOM_ORIGIN.add(1, 1, 2), Direction.UP));
+              Blocks.BLACK_SHULKER_BOX, "rib", "gold", ROOM_ORIGIN.add(4, 1, 1), Direction.UP));
 
   @Override
   public void runTest(ClientGameTestContext context) {
@@ -142,6 +144,14 @@ public class GalleryGenerator implements FabricClientGameTest {
               // Props - barrel and chest
               world.setBlockState(origin.add(4, 1, 0), Blocks.BARREL.getDefaultState());
               world.setBlockState(origin.add(0, 1, 0), Blocks.CHEST.getDefaultState());
+
+              // Partial ceiling over back half for enclosed feel
+              for (int x = 0; x < width; x++) {
+                for (int z = depth / 2; z < depth; z++) {
+                  world.setBlockState(
+                      origin.add(x, height + 1, z), Blocks.SPRUCE_PLANKS.getDefaultState());
+                }
+              }
 
               LOGGER.info("Room built: {}x{}x{} at {}", width, depth, height, origin);
             });
