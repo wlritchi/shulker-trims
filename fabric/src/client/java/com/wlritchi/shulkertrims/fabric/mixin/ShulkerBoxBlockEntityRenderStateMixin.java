@@ -7,22 +7,19 @@ import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-/**
- * Mixin to add trim data storage to ShulkerBoxBlockEntityRenderState.
- */
+/** Mixin to add trim data storage to ShulkerBoxBlockEntityRenderState. */
 @Mixin(ShulkerBoxBlockEntityRenderState.class)
 public class ShulkerBoxBlockEntityRenderStateMixin implements TrimmedShulkerRenderState {
 
-    @Unique
-    private @Nullable ShulkerTrim shulkerTrims$trim;
+  @Unique private @Nullable ShulkerTrim shulkerTrims$trim;
 
-    @Override
-    public @Nullable ShulkerTrim shulkerTrims$getTrim() {
-        return this.shulkerTrims$trim;
-    }
+  @Override
+  public @Nullable ShulkerTrim shulkerTrims$getTrim() {
+    return this.shulkerTrims$trim;
+  }
 
-    @Override
-    public void shulkerTrims$setTrim(@Nullable ShulkerTrim trim) {
-        this.shulkerTrims$trim = trim;
-    }
+  @Override
+  public void shulkerTrims$setTrim(@Nullable ShulkerTrim trim) {
+    this.shulkerTrims$trim = trim;
+  }
 }

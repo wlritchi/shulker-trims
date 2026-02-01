@@ -6,21 +6,18 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 
-/**
- * Registry for Shulker Trims recipe serializers.
- */
+/** Registry for Shulker Trims recipe serializers. */
 public final class ShulkerTrimsRecipeSerializers {
-    public static final RecipeSerializer<ShulkerTrimRecipe> SHULKER_TRIM =
-        new ShulkerTrimRecipe.Serializer();
+  public static final RecipeSerializer<ShulkerTrimRecipe> SHULKER_TRIM =
+      new ShulkerTrimRecipe.Serializer();
 
-    private ShulkerTrimsRecipeSerializers() {}
+  private ShulkerTrimsRecipeSerializers() {}
 
-    public static void register() {
-        Registry.register(
-            Registries.RECIPE_SERIALIZER,
-            Identifier.of(ShulkerTrimsMod.MOD_ID, "shulker_trim"),
-            SHULKER_TRIM
-        );
-        ShulkerTrimsMod.LOGGER.info("Registered shulker trim recipe serializer");
-    }
+  public static void register() {
+    Registry.register(
+        Registries.RECIPE_SERIALIZER,
+        Identifier.of(ShulkerTrimsMod.MOD_ID, "shulker_trim"),
+        SHULKER_TRIM);
+    ShulkerTrimsMod.LOGGER.info("Registered shulker trim recipe serializer");
+  }
 }
