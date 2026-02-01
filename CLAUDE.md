@@ -19,23 +19,39 @@ Shulker Trims is a Minecraft mod that adds the ability to apply armor trim patte
 ## Dependency Verification
 
 This project uses Gradle's dependency verification (`gradle/verification-metadata.xml`) to ensure
-build reproducibility and detect supply chain attacks. All dependencies must have their checksums
-recorded.
+build reproducibility and detect supply chain attacks. **Every dependency must have its checksum
+recorded—no exceptions.**
 
-**Important**: Gradle's `--write-verification-metadata` flag does NOT work correctly with this
-project due to bugs related to how we pin SNAPSHOT dependencies (MCProtocolLib). The snapshot
-pinning in `build.gradle.kts` uses `resolutionStrategy` with exact version strings, which is the
-only approach compatible with verification—but Gradle's metadata writer creates duplicate entries.
+### Security Policy
+
+**NEVER add `<trust group="..."/>` entries** for external dependencies, regardless of how reputable
+the source appears. The only trusted groups are for artifacts generated locally during the build
+(e.g., Fabric Loom's remapped artifacts) that have no remote checksums to verify against.
+
+This is a strict security requirement. Supply chain attacks can compromise any package registry,
+and hash verification is the only defense. Adding a new dependency with many transitive dependencies
+requires manually fetching and recording checksums for ALL of them.
+
+### Adding New Dependencies
+
+Gradle's `--write-verification-metadata` flag does NOT work correctly with this project due to bugs
+related to how we pin SNAPSHOT dependencies (MCProtocolLib). The snapshot pinning in
+`build.gradle.kts` uses `resolutionStrategy` with exact version strings, which is the only approach
+compatible with verification—but Gradle's metadata writer creates duplicate entries.
 
 **When adding new dependencies or updating versions**:
 1. Run the build and note which artifacts fail verification
-2. Manually fetch checksums from Maven Central (use the `.sha256` files)
+2. For each failing artifact, manually fetch its checksum from Maven Central (use `.sha256` files)
 3. Add entries to `gradle/verification-metadata.xml` following the existing format
+4. Repeat until the build passes—this includes ALL transitive dependencies
 
 Example for fetching a checksum:
 ```bash
 curl -sL "https://repo1.maven.org/maven2/io/netty/netty-codec/4.2.1.Final/netty-codec-4.2.1.Final.jar.sha256"
 ```
+
+For dependencies with many transitive dependencies, this process can be tedious but is necessary.
+Consider whether the dependency is worth the maintenance burden before adding it.
 
 Output JARs:
 - `fabric/build/libs/shulker-trims-mc1.21.10-fabric-1.0.0.jar` — Fabric-only mod
