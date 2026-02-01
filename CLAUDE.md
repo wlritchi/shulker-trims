@@ -39,16 +39,22 @@ related to how we pin SNAPSHOT dependencies (MCProtocolLib). The snapshot pinnin
 `build.gradle.kts` uses `resolutionStrategy` with exact version strings, which is the only approach
 compatible with verification—but Gradle's metadata writer creates duplicate entries.
 
-**When adding new dependencies or updating versions**:
-1. Run the build and note which artifacts fail verification
-2. For each failing artifact, manually fetch its checksum from Maven Central (use `.sha256` files)
-3. Add entries to `gradle/verification-metadata.xml` following the existing format
-4. Repeat until the build passes—this includes ALL transitive dependencies
+**When adding new dependencies or updating versions**, use the helper script:
 
-Example for fetching a checksum:
 ```bash
-curl -sL "https://repo1.maven.org/maven2/io/netty/netty-codec/4.2.1.Final/netty-codec-4.2.1.Final.jar.sha256"
+# Parse Gradle output and add all missing checksums automatically
+./gradlew build 2>&1 | ./scripts/add-verification-hashes.py --from-gradle-output
+
+# Or add specific artifacts manually
+./scripts/add-verification-hashes.py com.google.guava:guava:32.1.3-jre
+
+# Dry run to see what would be added
+./scripts/add-verification-hashes.py --dry-run com.google.guava:guava:32.1.3-jre
 ```
+
+The script fetches checksums from Maven repositories (preferring `.sha256` files, falling back to
+computing SHA256 from downloaded artifacts). It searches Maven Central, Fabric Maven, OpenCollab,
+Modrinth, and Gradle Plugin Portal.
 
 For dependencies with many transitive dependencies, this process can be tedious but is necessary.
 Consider whether the dependency is worth the maintenance burden before adding it.
