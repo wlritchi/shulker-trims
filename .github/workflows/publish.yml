@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # Required for GitHub Releases
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
@@ -29,6 +31,11 @@ jobs:
 
       - name: Build all modules
         run: ./gradlew build
+
+      - name: Attest universal JAR
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be  # v2.4.0
+        with:
+          subject-path: build/forgix/shulker-trims-*.jar
 
       - name: Detect version type
         id: version-type
