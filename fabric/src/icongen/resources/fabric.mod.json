@@ -9,7 +9,8 @@
   "environment": "client",
   "entrypoints": {
     "fabric-client-gametest": [
-      "com.wlritchi.shulkertrims.fabric.icongen.IconGenerator"
+      "com.wlritchi.shulkertrims.fabric.icongen.IconGenerator",
+      "com.wlritchi.shulkertrims.fabric.icongen.GalleryGenerator"
     ]
   },
   "depends": {
