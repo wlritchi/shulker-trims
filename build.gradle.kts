@@ -1,3 +1,4 @@
+import com.diffplug.gradle.spotless.SpotlessExtension
 import java.util.jar.Attributes
 import java.util.jar.Manifest
 
@@ -80,10 +81,16 @@ plugins {
     id("fabric-loom") version "1.15.0-alpha.16" apply false
     id("io.typst.spigradle.spigot") version "4.0.0" apply false
     id("io.github.pacifistmc.forgix") version "2.0.0-SNAPSHOT.5.1"
+    id("com.diffplug.spotless") version "7.0.2" apply false
 }
 
 group = property("maven_group")!!
 version = gitVersion
+
+repositories {
+    mavenCentral()
+}
+
 
 base {
     archivesName.set(property("archives_base_name").toString())
@@ -170,12 +177,19 @@ dependencyLocking {
 
 subprojects {
     apply(plugin = "java")
+    apply(plugin = "com.diffplug.spotless")
 
     group = property("maven_group")!!
     version = rootProject.version
 
     dependencyLocking {
         lockAllConfigurations()
+    }
+
+    configure<SpotlessExtension> {
+        java {
+            googleJavaFormat()
+        }
     }
 
     java {
