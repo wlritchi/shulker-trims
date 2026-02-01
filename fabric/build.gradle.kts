@@ -284,6 +284,15 @@ loom {
             // Disable network synchronizer to avoid crashes with custom network operations
             vmArg("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
         }
+        register("gallery") {
+            client()
+            name = "Generate Gallery"
+            source(sourceSets.getByName("icongen"))
+            vmArg("-Dfabric.client.gametest")
+            vmArg("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
+            // Only run GalleryGenerator, not IconGenerator
+            vmArg("-Dfabric.client.gametest.testClass=com.wlritchi.shulkertrims.fabric.icongen.GalleryGenerator")
+        }
     }
 }
 
@@ -301,6 +310,19 @@ afterEvaluate {
         val outputDir = project.layout.buildDirectory.dir("icons").get().asFile
         jvmArgs("-Dshulker_trims.icongen.output=${outputDir.absolutePath}")
     }
+
+    tasks.named<JavaExec>("runGallery") {
+        // Pass through shulker_trims.gallery.* system properties
+        System.getProperties().forEach { key, value ->
+            if (key.toString().startsWith("shulker_trims.gallery.")) {
+                jvmArgs("-D$key=$value")
+            }
+        }
+
+        // Set default output directory
+        val outputPath = project.layout.buildDirectory.file("gallery/gallery.png").get().asFile
+        jvmArgs("-Dshulker_trims.gallery.output=${outputPath.absolutePath}")
+    }
 }
 
 // Convenience task with clearer name
@@ -308,5 +330,11 @@ tasks.register("generateIcon") {
     group = "shulker trims"
     description = "Generate isometric icon renders of trimmed shulker boxes"
     dependsOn("runIcongen")
+}
+
+tasks.register("generateGallery") {
+    group = "shulker trims"
+    description = "Generate gallery/demo image of trimmed shulker boxes"
+    dependsOn("runGallery")
 }
 
