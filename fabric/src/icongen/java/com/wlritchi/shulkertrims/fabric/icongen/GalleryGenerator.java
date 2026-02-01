@@ -95,8 +95,55 @@ public class GalleryGenerator implements FabricClientGameTest {
         .runOnServer(
             server -> {
               ServerWorld world = server.getOverworld();
-              // TODO: Build room structure
-              LOGGER.info("Room built");
+
+              // Room dimensions: 5 wide (x), 4 deep (z), 3 tall (y)
+              int width = 5;
+              int depth = 4;
+              int height = 3;
+
+              BlockPos origin = ROOM_ORIGIN;
+
+              // Floor - oak planks
+              for (int x = 0; x < width; x++) {
+                for (int z = 0; z < depth; z++) {
+                  world.setBlockState(origin.add(x, 0, z), Blocks.OAK_PLANKS.getDefaultState());
+                }
+              }
+
+              // Back wall (z = depth-1) - spruce planks with stripped log accents
+              for (int x = 0; x < width; x++) {
+                for (int y = 1; y <= height; y++) {
+                  Block block = (x == 2) ? Blocks.STRIPPED_SPRUCE_LOG : Blocks.SPRUCE_PLANKS;
+                  world.setBlockState(origin.add(x, y, depth - 1), block.getDefaultState());
+                }
+              }
+
+              // Side walls - partial for framing
+              for (int z = 0; z < depth - 1; z++) {
+                for (int y = 1; y <= height; y++) {
+                  // Left wall (x = 0)
+                  world.setBlockState(origin.add(-1, y, z), Blocks.SPRUCE_PLANKS.getDefaultState());
+                  // Right wall (x = width)
+                  world.setBlockState(
+                      origin.add(width, y, z), Blocks.SPRUCE_PLANKS.getDefaultState());
+                }
+              }
+
+              // Shelves - spruce slabs at y+2 along back wall
+              for (int x = 0; x < width; x++) {
+                world.setBlockState(
+                    origin.add(x, 2, depth - 2), Blocks.SPRUCE_SLAB.getDefaultState());
+              }
+
+              // Lanterns - warm lighting
+              world.setBlockState(origin.add(1, 3, 1), Blocks.LANTERN.getDefaultState());
+              world.setBlockState(origin.add(4, 3, 2), Blocks.LANTERN.getDefaultState());
+
+              // Props - barrel and chest
+              world.setBlockState(origin.add(4, 1, 0), Blocks.BARREL.getDefaultState());
+              world.setBlockState(origin.add(0, 1, 0), Blocks.CHEST.getDefaultState());
+
+              LOGGER.info("Room built: {}x{}x{} at {}", width, depth, height, origin);
             });
   }
 
