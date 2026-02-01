@@ -12,8 +12,11 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.ChestBlock;
 import net.minecraft.block.ShulkerBoxBlock;
+import net.minecraft.block.SlabBlock;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
+import net.minecraft.block.enums.SlabType;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.server.world.ServerWorld;
@@ -42,9 +45,13 @@ public class GalleryGenerator implements FabricClientGameTest {
       List.of(
           // On shelf (y=3 is on top of slab at y=2, z=2)
           new ShulkerPlacement(
-              Blocks.PURPLE_SHULKER_BOX, "sentry", "gold", ROOM_ORIGIN.add(0, 3, 2), Direction.UP),
+              Blocks.PURPLE_SHULKER_BOX, "tide", "gold", ROOM_ORIGIN.add(0, 3, 2), Direction.UP),
           new ShulkerPlacement(
-              Blocks.CYAN_SHULKER_BOX, "wild", "copper", ROOM_ORIGIN.add(2, 3, 2), Direction.UP),
+              Blocks.YELLOW_SHULKER_BOX,
+              "wayfinder",
+              "emerald",
+              ROOM_ORIGIN.add(2, 3, 2),
+              Direction.UP),
           new ShulkerPlacement(
               Blocks.WHITE_SHULKER_BOX,
               "dune",
@@ -56,14 +63,10 @@ public class GalleryGenerator implements FabricClientGameTest {
               Blocks.ORANGE_SHULKER_BOX,
               "coast",
               "diamond",
-              ROOM_ORIGIN.add(0, 1, 1),
-              Direction.SOUTH), // On side, facing camera
+              ROOM_ORIGIN.add(0, 1, 0),
+              Direction.EAST), // On side, facing left
           new ShulkerPlacement(
-              Blocks.LIGHT_GRAY_SHULKER_BOX,
-              "vex",
-              "amethyst",
-              ROOM_ORIGIN.add(2, 1, 0),
-              Direction.UP),
+              Blocks.BLUE_SHULKER_BOX, "flow", "copper", ROOM_ORIGIN.add(2, 1, 0), Direction.UP),
           new ShulkerPlacement(
               Blocks.BLACK_SHULKER_BOX, "rib", "gold", ROOM_ORIGIN.add(4, 1, 1), Direction.UP));
 
@@ -98,32 +101,33 @@ public class GalleryGenerator implements FabricClientGameTest {
             server -> {
               ServerWorld world = server.getOverworld();
 
-              // Room dimensions: 5 wide (x), 4 deep (z), 3 tall (y)
+              // Room dimensions: 5 wide (x), 6 deep (z: -2 to 3), 5 tall (y)
               int width = 5;
-              int depth = 4;
-              int height = 3;
+              int depth = 6; // Extended forward
+              int height = 5; // Taller walls
+              int zStart = -2; // Floor extends toward camera
 
               BlockPos origin = ROOM_ORIGIN;
 
-              // Floor - oak planks
+              // Floor - oak planks (extended forward)
               for (int x = 0; x < width; x++) {
-                for (int z = 0; z < depth; z++) {
+                for (int z = zStart; z < depth + zStart; z++) {
                   world.setBlockState(origin.add(x, 0, z), Blocks.OAK_PLANKS.getDefaultState());
                 }
               }
 
-              // Back wall (z = depth-1) - spruce planks with stripped log accents
+              // Back wall (z = 3) - spruce planks with stripped log accents
               for (int x = 0; x < width; x++) {
                 for (int y = 1; y <= height; y++) {
                   Block block = (x == 2) ? Blocks.STRIPPED_SPRUCE_LOG : Blocks.SPRUCE_PLANKS;
-                  world.setBlockState(origin.add(x, y, depth - 1), block.getDefaultState());
+                  world.setBlockState(origin.add(x, y, 3), block.getDefaultState());
                 }
               }
 
-              // Side walls - partial for framing
-              for (int z = 0; z < depth - 1; z++) {
+              // Side walls - extended forward to cover floor, taller
+              for (int z = zStart; z < 3; z++) {
                 for (int y = 1; y <= height; y++) {
-                  // Left wall (x = 0)
+                  // Left wall (x = -1)
                   world.setBlockState(origin.add(-1, y, z), Blocks.SPRUCE_PLANKS.getDefaultState());
                   // Right wall (x = width)
                   world.setBlockState(
@@ -131,23 +135,26 @@ public class GalleryGenerator implements FabricClientGameTest {
                 }
               }
 
-              // Shelves - spruce slabs at y+2 along back wall
+              // Shelf - spruce TOP slabs at y=2 (shulkers sit on top at y=3)
+              BlockState topSlab =
+                  Blocks.SPRUCE_SLAB.getDefaultState().with(SlabBlock.TYPE, SlabType.TOP);
               for (int x = 0; x < width; x++) {
-                world.setBlockState(
-                    origin.add(x, 2, depth - 2), Blocks.SPRUCE_SLAB.getDefaultState());
+                world.setBlockState(origin.add(x, 2, 2), topSlab);
               }
 
-              // Lanterns - warm lighting
-              world.setBlockState(origin.add(1, 3, 1), Blocks.LANTERN.getDefaultState());
-              world.setBlockState(origin.add(4, 3, 2), Blocks.LANTERN.getDefaultState());
+              // Lanterns - warm lighting (on shelf)
+              world.setBlockState(origin.add(1, 3, 2), Blocks.LANTERN.getDefaultState());
+              world.setBlockState(origin.add(3, 3, 2), Blocks.LANTERN.getDefaultState());
 
-              // Props - barrel and chest
+              // Props - barrel and chest (chest faces same direction as orange shulker)
               world.setBlockState(origin.add(4, 1, 0), Blocks.BARREL.getDefaultState());
-              world.setBlockState(origin.add(0, 1, 0), Blocks.CHEST.getDefaultState());
+              world.setBlockState(
+                  origin.add(0, 1, 1),
+                  Blocks.CHEST.getDefaultState().with(ChestBlock.FACING, Direction.EAST));
 
-              // Partial ceiling over back half for enclosed feel
-              for (int x = 0; x < width; x++) {
-                for (int z = depth / 2; z < depth; z++) {
+              // Full ceiling (out of frame, but affects lighting)
+              for (int x = -1; x <= width; x++) {
+                for (int z = zStart; z <= 3; z++) {
                   world.setBlockState(
                       origin.add(x, height + 1, z), Blocks.SPRUCE_PLANKS.getDefaultState());
                 }
@@ -198,15 +205,15 @@ public class GalleryGenerator implements FabricClientGameTest {
 
   /** Positions the camera for the gallery shot. */
   private void positionCamera(TestSingleplayerContext singleplayer, ClientGameTestContext context) {
-    // TODO: Fine-tune camera position
-    // Position looking at the room from slightly elevated angle
-    singleplayer.getServer().runCommand("tp @p 2 102 -2 0 20");
+    // Position at player eye height, offset left with slight rotation right
+    singleplayer.getServer().runCommand("tp @p 3.2 101.62 -1.7 10 20");
     context.waitTicks(10);
 
-    // Hide HUD
+    // Hide HUD and set moody brightness
     context.runOnClient(
         client -> {
           client.options.hudHidden = true;
+          client.options.getGamma().setValue(0.0); // Moody (leftmost on slider)
         });
     context.waitTicks(5);
   }
