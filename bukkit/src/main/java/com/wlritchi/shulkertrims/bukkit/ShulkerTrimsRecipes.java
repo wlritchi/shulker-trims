@@ -69,9 +69,10 @@ public final class ShulkerTrimsRecipes {
     // for shulker boxes since they're not armor items.
     // We'll use PrepareSmithingEvent to intercept and handle custom output.
 
-    // For now, register recipes that will be intercepted by our event handler
-    for (int i = 0; i < SHULKER_BOXES.length; i++) {
-      Material shulker = SHULKER_BOXES[i];
+    int added = 0;
+    int skipped = 0;
+
+    for (Material shulker : SHULKER_BOXES) {
       NamespacedKey key = new NamespacedKey(plugin, "trim_" + shulker.name().toLowerCase());
 
       // Create recipe choice for all templates
@@ -81,9 +82,21 @@ public final class ShulkerTrimsRecipes {
 
       SmithingTrimRecipe recipe =
           new SmithingTrimRecipe(key, templateChoice, baseChoice, additionChoice);
-      plugin.getServer().addRecipe(recipe);
+
+      // addRecipe returns false if recipe already exists or couldn't be added
+      if (plugin.getServer().addRecipe(recipe)) {
+        added++;
+      } else {
+        skipped++;
+      }
     }
 
-    plugin.getLogger().info("Registered " + SHULKER_BOXES.length + " shulker trim recipes");
+    if (skipped > 0) {
+      plugin
+          .getLogger()
+          .info("Registered " + added + " shulker trim recipes (" + skipped + " already existed)");
+    } else {
+      plugin.getLogger().info("Registered " + added + " shulker trim recipes");
+    }
   }
 }

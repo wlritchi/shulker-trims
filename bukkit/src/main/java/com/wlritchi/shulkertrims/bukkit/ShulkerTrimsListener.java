@@ -2,6 +2,7 @@ package com.wlritchi.shulkertrims.bukkit;
 
 import com.wlritchi.shulkertrims.common.ShulkerTrim;
 import io.papermc.paper.event.packet.PlayerChunkLoadEvent;
+import io.papermc.paper.event.server.ServerResourcesReloadedEvent;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -284,5 +285,17 @@ public class ShulkerTrimsListener implements Listener {
               network.syncChunkToPlayer(player, chunk);
             },
             1L);
+  }
+
+  /**
+   * When server resources are reloaded (e.g., /minecraft:reload or datapack changes), re-register
+   * our recipes. Plugin-registered recipes are lost during resource reloads.
+   *
+   * @see <a href="https://github.com/PaperMC/Paper/issues/4244">Paper issue #4244</a>
+   */
+  @EventHandler
+  public void onServerResourcesReloaded(ServerResourcesReloadedEvent event) {
+    plugin.getLogger().info("Server resources reloaded, re-registering shulker trim recipes...");
+    ShulkerTrimsRecipes.register(plugin);
   }
 }
