@@ -14,7 +14,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write  # Required for dependency graph submission
       id-token: write
       attestations: write
     steps:
@@ -27,10 +27,16 @@ jobs:
           java-version: ${{ env.java_version }}
           distribution: temurin
 
+      # Dependency graph submission feeds GitHub's Dependabot vulnerability
+      # alerts for Gradle dependencies. We intentionally do NOT configure
+      # Dependabot version-update PRs for Gradle (only for GitHub Actions),
+      # because each version bump requires updating verification-metadata.xml
+      # checksums, which Dependabot can't do automatically.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@f29f5a9d7b09a7c6b29859002d29d24e1674c884  # v5.0.1
         with:
           cache-disabled: true
+          dependency-graph: generate-and-submit
 
       - name: Build all modules
         run: ./gradlew build
