@@ -44,7 +44,7 @@ jobs:
           subject-path: build/forgix/shulker-trims-*.jar
 
       - name: Upload Universal JAR
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
           name: universal-jar
           path: build/forgix/shulker-trims-*.jar
@@ -128,7 +128,7 @@ jobs:
         run: xvfb-run -a ./gradlew :fabric:runClientGameTest
 
       - name: Upload test screenshots
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         if: always()
         with:
           name: client-gametest-screenshots
@@ -141,7 +141,7 @@ jobs:
       # When templates are missing, Fabric saves screenshots to the templates directory
       # These can be downloaded and committed to the repository
       - name: Upload generated templates (if any)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         if: always()
         with:
           name: generated-templates
@@ -150,7 +150,7 @@ jobs:
 
       - name: Store test reports on failure
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
           name: client-gametest-reports
           path: |
