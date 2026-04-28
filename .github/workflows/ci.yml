@@ -77,7 +77,7 @@ jobs:
           path: run/mods
 
       - name: Run Minecraft runtime test
-        uses: headlesshq/mc-runtime-test@2a5a5bcc9d833cf22a817f3561915421dfd6a287  # 4.1.0
+        uses: headlesshq/mc-runtime-test@9d9ea4af8ef6d82648051f750c49905f75d0c3bb  # 4.4.0
         with:
           mc: 1.21.10
           modloader: fabric
